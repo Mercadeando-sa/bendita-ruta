@@ -306,6 +306,7 @@ table.rank tr.clic{cursor:pointer} table.rank tr.clic:hover td{background:#f8faf
           <input id="f-negocio" placeholder="Ej.: Bodega Don Lucho" autocomplete="off">
           <label class="f" for="f-direccion">Dirección *</label>
           <input id="f-direccion" placeholder="Ej.: Av. Arequipa 2450" autocomplete="off">
+          <div id="f-dir-nota" class="small mut hidden" style="margin-top:5px"></div>
           <label class="f" for="f-tipovia">¿Está en calle o avenida? *</label>
           <select id="f-tipovia"></select>
           <label class="f" for="f-contacto">Nombre del contacto <span class="opc">(opcional)</span></label>
@@ -789,7 +790,8 @@ const Vendedor = {
 const Form = {
   modo: 'nueva', punto: null, gps: null, foto: null, watch: null, timer: null, mini: null, miniCapa: null,
   abrir(modo = 'nueva', punto = null) {
-    Object.assign(this, {modo, punto, gps: null, foto: null});
+    Object.assign(this, {modo, punto, gps: null, foto: null, dirAuto: null});
+    $('#f-dir-nota').classList.add('hidden');
     $('#f-titulo').textContent = modo === 'nueva' ? 'Nueva visita' : 'Revisita para cerrar';
     $('#f-ficha').reset(); $('#f-ficha').classList.add('hidden');
     $('#f-cerca').classList.add('hidden'); $('#f-error').classList.add('hidden');
@@ -900,7 +902,33 @@ const Form = {
       }
       return this.mostrarFicha();
     }
+    this.sugerirDireccion(g);
     this.revisarCercanas();
+  },
+  // Dirección automática a partir del GPS (OpenStreetMap / Nominatim, gratis). El vendedor puede corregirla.
+  async sugerirDireccion(g) {
+    const inp = $('#f-direccion'), nota = $('#f-dir-nota');
+    if (inp.value.trim() && inp.value !== this.dirAuto) return; // ya la escribió el vendedor
+    nota.textContent = '📍 Buscando la dirección…'; nota.classList.remove('hidden');
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 8000);
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${g.lat}&lon=${g.lng}&zoom=18&addressdetails=1&accept-language=es`, {signal: ctl.signal});
+      clearTimeout(t);
+      const a = (await r.json()).address || {};
+      if (this.gps !== g) return; // se cerró el formulario o cambió la ubicación
+      const via = a.road || a.pedestrian || a.footway || a.residential || a.path || '';
+      if (!via) throw new Error('sin calle');
+      const distrito = a.city_district || a.suburb || a.quarter || a.neighbourhood || '';
+      const dir = [via + (a.house_number ? ' ' + a.house_number : ''), distrito].filter(Boolean).join(', ');
+      if (inp.value.trim() && inp.value !== this.dirAuto) return;
+      inp.value = dir; this.dirAuto = dir;
+      const n = via.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const tipo = /^(avenida|av\.?)\s/.test(n) ? 'Avenida' : /^(calle|ca\.?)\s/.test(n) ? 'Calle' : /^(jiron|jr\.?)\s/.test(n) ? 'Jirón' : /^(pasaje|psje\.?|pje\.?)\s/.test(n) ? 'Pasaje' : '';
+      if (tipo && !$('#f-tipovia').value) $('#f-tipovia').value = tipo;
+      nota.textContent = a.house_number ? '📍 Dirección sugerida por el GPS. Revísala antes de guardar.' : '📍 Calle sugerida por el GPS. Agrega el número de la puerta.';
+    } catch (e) {
+      if (this.gps === g) nota.textContent = 'No se pudo obtener la dirección automáticamente. Escríbela.';
+    }
   },
   revisarCercanas() {
     const cerca = Vendedor.puntosLocales()
