@@ -356,7 +356,7 @@ table.usr tr.inact td{opacity:.5}
       <div id="v-lista-hoy" class="lista" style="margin-top:10px"></div>
     </div>
     <div id="vt-pros" class="hidden">
-      <p class="small mut" style="margin:0 0 8px">Tiendas que quedaron "en el aire", de la más cercana a la más lejana. Solo puedes revisitarlas para cerrar la venta, y tienes que estar en el lugar.</p>
+      <p class="small mut" style="margin:0 0 8px">Tiendas a las que les interesó y aún no cierran, de la más cercana a la más lejana. Desde aquí las pasas a <b>cerrada</b> o a <b>ya no le interesa</b> (tienes que estar en la tienda).</p>
       <div class="ubic js-ubic"></div>
       <div id="v-mapa-pros" class="mapa chico"></div>
       <div id="v-lista-pros" class="lista"></div>
@@ -486,7 +486,7 @@ table.usr tr.inact td{opacity:.5}
         <div class="kpi k-vis"><b id="s-k-vis">0</b><span>Visitados</span><small>tiendas nuevas</small></div>
         <div class="kpi k-pro"><b id="s-k-pro">0</b><span>Prospectos</span><small>les interesó</small></div>
         <div class="kpi k-cie"><b id="s-k-cie">0</b><span>Cierres</span><small>en la fecha del cierre</small></div>
-        <div class="kpi k-air"><b id="s-k-air">0</b><span>En el aire</span><small>prospectos sin cerrar</small></div>
+        <div class="kpi k-air"><b id="s-k-air">0</b><span>Prospectos abiertos</span><small>aún sin cerrar</small></div>
         <div class="kpi"><b id="s-k-conv">0%</b><span>% de cierre</span><small>cierres / visitados</small></div>
       </div>
       <div class="sup-grid" style="margin-top:12px">
@@ -650,7 +650,7 @@ const RES = {
 const COLORES_VENDEDOR = ['#2563eb', '#9333ea', '#0891b2', '#db2777', '#4d7c0f', '#ea580c', '#0f766e', '#7c3aed'];
 
 function chipRes(v) {
-  const t = v.tipo === 'revisita' && v.resultado === 'prospecto' ? 'Sigue en el aire' : RES[v.resultado]?.t;
+  const t = v.tipo === 'revisita' ? {prospecto: 'Sigue como prospecto', visita: 'Ya no le interesa', cierre: 'Cierre'}[v.resultado] : RES[v.resultado]?.t;
   return `<span class="chip ${v.resultado}">${esc(t)}</span>`;
 }
 function imgFoto(url, cls = '') {
@@ -665,10 +665,10 @@ function normalizarVisita(v) {
    LÓGICA DE NEGOCIO (la misma regla vive en Code.gs)
    - Cada tienda ("punto") nace con una visita tipo "nueva".
    - Solo se puede revisitar una tienda en estado "prospecto", y solo para cerrar
-     (resultado: cierre, o "sigue en el aire" = prospecto).
+     (resultado: cierre, sigue como prospecto, o ya no le interesa).
    - Visitados = tiendas nuevas. Prospectos = tiendas nuevas a las que les interesó.
      Cierres = visitas con resultado cierre (cuentan en la fecha del cierre).
-     En el aire = tiendas registradas en el periodo que siguen como prospecto.
+     Prospectos abiertos = tiendas registradas en el periodo que siguen como prospecto.
    ===================================================================== */
 function construirPuntos(visitas, revisiones) {
   const anulados = new Set((revisiones || []).filter(r => r.decision === 'duplicado').map(r => r.idB));
@@ -727,7 +727,6 @@ function validarVisita(v, puntos) {
     const p = puntos.get(v.puntoId);
     if (!p || p.anulado) return 'La tienda a revisitar no existe';
     if (p.estado !== 'prospecto') return `No se puede revisitar "${p.base.negocio}": ya está como ${RES[p.estado].t.toLowerCase()}. Solo se revisitan prospectos para cerrar.`;
-    if (v.resultado === 'visita') return 'Una revisita solo puede terminar en cierre o seguir en el aire';
   }
   return null;
 }
@@ -1025,7 +1024,7 @@ const Vendedor = {
     }
     this.ordenar(lista);
     const dist = d => d == null ? '' : d < 1000 ? `a ${d} m` : `a ${(d / 1000).toFixed(1)} km`;
-    const etiqueta = {prospecto: 'Prospecto en el aire', cierre: 'Cerrada', visita: 'Sin interés'};
+    const etiqueta = {prospecto: 'Prospecto', cierre: 'Cerrada', visita: 'Sin interés'};
     const cont = $(cual === 'pros' ? '#v-lista-pros' : '#v-lista-hist');
     cont.innerHTML = lista.length ? lista.map((p, i) => `
       <div class="item" data-foco="${esc(p.id)}" data-cual="${cual}">
@@ -1036,11 +1035,12 @@ const Vendedor = {
           <small>${p.d != null ? '<strong style="color:var(--tx)">' + dist(p.d) + '</strong> · ' : ''}Última visita ${esc(fechaCorta(p.ultima.slice(0, 10)))}${p.nVisitas > 1 ? ` · ${p.nVisitas} visitas` : ''}</small>
           <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap"><span class="chip ${p.estado}">${etiqueta[p.estado]}</span>${p.tipoPunto ? `<span class="chip visita">${esc(p.tipoPunto)}</span>` : ''}${p.pendiente ? '<span class="chip pend">Pendiente de subir</span>' : ''}</div>
           <div class="acc-v">
-            ${p.estado === 'prospecto' ? `<button class="btn prim" data-revisitar="${esc(p.id)}" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>Revisitar para cerrar</button>` : ''}
+            ${p.estado === 'prospecto' ? `<button class="btn prim" data-revisitar="${esc(p.id)}" data-res="cierre" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>✓ Cerrar venta</button>
+              <button class="btn peligro" data-revisitar="${esc(p.id)}" data-res="visita" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>✕ Ya no le interesa</button>` : ''}
             <a class="btn sec" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}">Cómo llegar ↗</a>
           </div></div>
       </div>`).join('')
-      : `<div class="vacio">${cual === 'pros' ? 'No tienes prospectos en el aire. 🎉' : 'No hay tiendas con ese filtro.'}</div>`;
+      : `<div class="vacio">${cual === 'pros' ? 'No tienes prospectos pendientes. 🎉' : 'No hay tiendas con ese filtro.'}</div>`;
     // mapa
     const elMapa = $(cual === 'pros' ? '#v-mapa-pros' : '#v-mapa-hist');
     if (!this.mapas[cual]) { this.mapas[cual] = Mapas.crear(elMapa); if (this.mapas[cual]) this.capas[cual] = L.layerGroup().addTo(this.mapas[cual]); }
@@ -1071,10 +1071,10 @@ const Vendedor = {
    ===================================================================== */
 const Form = {
   modo: 'nueva', punto: null, gps: null, foto: null, watch: null, timer: null, mini: null, miniCapa: null,
-  abrir(modo = 'nueva', punto = null) {
-    Object.assign(this, {modo, punto, gps: null, foto: null, dirAuto: null});
+  abrir(modo = 'nueva', punto = null, resInicial = null) {
+    Object.assign(this, {modo, punto, gps: null, foto: null, dirAuto: null, resInicial});
     $('#f-dir-nota').classList.add('hidden');
-    $('#f-titulo').textContent = modo === 'nueva' ? 'Nueva visita' : 'Revisita para cerrar';
+    $('#f-titulo').textContent = modo === 'nueva' ? 'Nueva visita' : 'Actualizar prospecto';
     $('#f-ficha').reset(); $('#f-ficha').classList.add('hidden');
     $('#f-cerca').classList.add('hidden'); $('#f-error').classList.add('hidden');
     $('#f-foto-box').innerHTML = '<input type="file" id="f-foto" accept="image/*" capture="environment" hidden><span style="font-size:34px">📷</span><span>Toca para tomar la foto</span>';
@@ -1084,11 +1084,11 @@ const Form = {
     poblarSelects();
     const canales = [...$('#f-canal').options].filter(o => o.value);
     if (canales.length === 1) $('#f-canal').value = canales[0].value;
-    $('#f-motivo-wrap').classList.add('hidden');
+    this.mostrarMotivo();
     const ri = $('#f-rev-info');
     ri.classList.toggle('hidden', modo !== 'revisita');
     if (punto) ri.innerHTML = `<div style="display:flex;gap:10px;align-items:center">${imgFoto(punto.fotoUrl).replace('<img', '<img style="width:64px;height:64px;border-radius:8px;object-fit:cover"')}
-      <div><b>${esc(punto.negocio)}</b><div class="small mut">${esc(punto.direccion)}</div><div style="margin-top:4px"><span class="chip prospecto">Prospecto en el aire</span></div></div></div>`;
+      <div><b>${esc(punto.negocio)}</b><div class="small mut">${esc(punto.direccion)}</div><div style="margin-top:4px"><span class="chip prospecto">Prospecto</span></div></div></div>`;
     $('#form').classList.remove('hidden'); document.body.style.overflow = 'hidden';
     this.capturarGPS();
   },
@@ -1097,16 +1097,24 @@ const Form = {
     $('#form').classList.add('hidden'); document.body.style.overflow = '';
   },
   pintarResultados() {
-    const ops = this.modo === 'nueva' ? ['visita', 'prospecto', 'cierre'] : ['cierre', 'prospecto'];
+    const ops = this.modo === 'nueva' ? ['visita', 'prospecto', 'cierre'] : ['cierre', 'visita', 'prospecto'];
+    const rev = {cierre: ['Pasar a cerrada', 'Aceptó: se cerró la venta'], visita: ['Ya no le interesa', 'Pasa a "sin interés"'], prospecto: ['Sigue como prospecto', 'Aún no decide']};
     $('#f-resultados').innerHTML = ops.map(r => {
-      const t = this.modo === 'revisita' && r === 'prospecto' ? 'Sigue en el aire' : RES[r].t;
-      const d = this.modo === 'revisita' && r === 'prospecto' ? 'Tampoco se cerró esta vez' : RES[r].d;
+      const t = this.modo === 'revisita' ? rev[r][0] : RES[r].t;
+      const d = this.modo === 'revisita' ? rev[r][1] : RES[r].d;
       return `<label class="res-op ${r}"><input type="radio" name="resultado" value="${r}"><i class="dot" style="background:${RES[r].c};width:14px;height:14px"></i><div><b>${t}</b><small>${d}</small></div></label>`;
     }).join('');
     $$('#f-resultados input').forEach(i => i.addEventListener('change', () => {
       $$('#f-resultados .res-op').forEach(l => l.classList.toggle('sel', l.querySelector('input').checked));
-      $('#f-motivo-wrap').classList.toggle('hidden', i.value !== 'prospecto' || !i.checked);
+      this.mostrarMotivo();
     }));
+    if (this.resInicial) { const i = $(`#f-resultados input[value="${this.resInicial}"]`); if (i) { i.checked = true; i.dispatchEvent(new Event('change')); } }
+  },
+  pideMotivo(r) { return r === 'prospecto' || (this.modo === 'revisita' && r === 'visita'); },
+  mostrarMotivo() {
+    const r = $('#f-resultados input:checked')?.value;
+    $('#f-motivo-wrap').classList.toggle('hidden', !this.pideMotivo(r));
+    $('#f-motivo-wrap label').textContent = r === 'visita' ? '¿Por qué ya no le interesa? *' : '¿Por qué no se cerró? *';
   },
   estadoGPS(clase, ico, txt, sub) {
     const g = $('#f-gps'); g.className = 'gps ' + clase;
@@ -1242,13 +1250,13 @@ const Form = {
     const p = Vendedor.puntosLocales().find(x => x.id === id);
     if (!p) return;
     const gps = this.gps;
-    this.modo = 'revisita'; this.punto = p;
-    $('#f-titulo').textContent = 'Revisita para cerrar';
+    this.modo = 'revisita'; this.punto = p; this.resInicial = null;
+    $('#f-titulo').textContent = 'Actualizar prospecto';
     $$('.solo-nueva').forEach(el => el.classList.add('hidden'));
     this.pintarResultados();
     const ri = $('#f-rev-info'); ri.classList.remove('hidden');
     ri.innerHTML = `<div style="display:flex;gap:10px;align-items:center">${imgFoto(p.fotoUrl).replace('<img', '<img style="width:64px;height:64px;border-radius:8px;object-fit:cover"')}
-      <div><b>${esc(p.negocio)}</b><div class="small mut">${esc(p.direccion)}</div><div style="margin-top:4px"><span class="chip prospecto">Prospecto en el aire</span></div></div></div>`;
+      <div><b>${esc(p.negocio)}</b><div class="small mut">${esc(p.direccion)}</div><div style="margin-top:4px"><span class="chip prospecto">Prospecto</span></div></div></div>`;
     this.recibirGPS(gps);
   },
   async tomarFoto(e) {
@@ -1276,7 +1284,7 @@ const Form = {
     }
     if (!val('#f-congeladora')) errores.push('Indica la congeladora ofrecida');
     if (!res) errores.push('Elige el resultado');
-    if (res === 'prospecto' && !val('#f-motivo')) errores.push('Indica por qué no se cerró');
+    if (this.pideMotivo(res) && !val('#f-motivo')) errores.push(res === 'visita' ? 'Indica por qué ya no le interesa' : 'Indica por qué no se cerró');
     const tel = val('#f-telefono');
     if (this.modo === 'nueva' && tel && !/^[0-9 +()-]{6,}$/.test(tel)) errores.push('El teléfono no parece válido');
     const box = $('#f-error');
@@ -1298,7 +1306,7 @@ const Form = {
       cargo: this.modo === 'nueva' ? val('#f-cargo') : '',
       telefono: this.modo === 'nueva' ? tel : '',
       congeladora: val('#f-congeladora'), resultado: res,
-      motivo: res === 'prospecto' ? val('#f-motivo') : '', observaciones: val('#f-obs'),
+      motivo: this.pideMotivo(res) ? val('#f-motivo') : '', observaciones: val('#f-obs'),
       lat: +this.gps.lat.toFixed(6), lng: +this.gps.lng.toFixed(6), precision: this.gps.acc
     };
     $('#f-guardar').disabled = true;
@@ -1430,7 +1438,7 @@ const Supervisor = {
     if (!usuario) {
       const filas = this.datos.vendedores.map(v => ({v, k: calcularKpis(this.puntos, {desde: this.desde, hasta: this.hasta, usuario: v.usuario, dia: this.dia, filtro})}))
         .sort((a, b) => b.k.cierres - a.k.cierres || b.k.visitados - a.k.visitados);
-      rw.innerHTML = `<h3 style="margin-bottom:6px">Resumen por vendedor</h3><table class="rank"><tr><th>Vendedor</th><th>Visit.</th><th>Prosp.</th><th>Cierres</th><th>En el aire</th><th>%</th></tr>` +
+      rw.innerHTML = `<h3 style="margin-bottom:6px">Resumen por vendedor</h3><table class="rank"><tr><th>Vendedor</th><th>Visit.</th><th>Prosp.</th><th>Cierres</th><th>Abiertos</th><th>%</th></tr>` +
         filas.map(({v, k}) => `<tr class="clic" data-st="${esc(v.usuario)}"><td><i class="dot" style="background:${this.colorVendedor(v.usuario)}"></i> ${esc(v.nombre)}<div class="small mut" style="margin-top:2px">${actvHtml(v.ultimaActividad)}</div></td><td>${k.visitados}</td><td>${k.prospectos}</td><td><b>${k.cierres}</b></td><td>${k.enAire}</td><td>${k.conv}%</td></tr>`).join('') +
         `</table><div class="small mut" style="margin-top:6px">El punto junto a cada nombre indica su última actividad en la app: <i class="dot" style="background:#16a34a"></i> hace menos de 30 min · <i class="dot" style="background:#d97706"></i> menos de 2 h · <i class="dot" style="background:#94a3b8"></i> más.</div><div style="height:14px"></div>`;
     } else rw.innerHTML = '';
@@ -1935,13 +1943,13 @@ const Demo = {
           min += 18 + Math.floor(rnd() * 22);
           const ri = huecos.indexOf(k);
           if (ri >= 0) {
-            const p = revisitas[ri]; const cierra = rnd() < .6;
+            const p = revisitas[ri]; const rr = rnd(); const cierra = rr < .55; const pierde = !cierra && rr < .7;
             const id = nid();
             vs.push({...p, id, tipo: 'revisita', puntoId: p.id, fecha, fechaHora: `${fecha}T${pad(Math.floor(min / 60))}:${pad(min % 60)}:00`,
-              resultado: cierra ? 'cierre' : 'prospecto', motivo: cierra ? '' : pick(CONFIG.MOTIVOS.slice(0, -1)),
+              resultado: cierra ? 'cierre' : pierde ? 'visita' : 'prospecto', motivo: cierra ? '' : pick(CONFIG.MOTIVOS.slice(0, -1)),
               lat: +(p.lat + 0.00003).toFixed(6), precision: 6 + Math.floor(rnd() * 12), fotoUrl: this.fachada(p.negocio, idn)});
             pendientes[c.usuario] = pendientes[c.usuario].filter(z => z !== p);
-            if (!cierra) pendientes[c.usuario].push({...p, fecha});
+            if (!cierra && !pierde) pendientes[c.usuario].push({...p, fecha});
             min += 15;
           }
           lat -= 0.00045 + rnd() * 0.0004;
@@ -2065,7 +2073,7 @@ function init() {
     const fo = e.target.closest('[data-foco]');
     if (fo && !e.target.closest('button, a')) return Vendedor.enfocar(fo.dataset.foco, fo.dataset.cual);
     const r = e.target.closest('[data-revisitar]');
-    if (r) { const p = Vendedor.puntosLocales().find(x => x.id === r.dataset.revisitar); if (p) Form.abrir('revisita', p); }
+    if (r) { const p = Vendedor.puntosLocales().find(x => x.id === r.dataset.revisitar); if (p) Form.abrir('revisita', p, r.dataset.res || null); }
     const d = e.target.closest('[data-desc]');
     if (d) { await Cola.quitar(d.dataset.desc, 'rechazadas'); Vendedor.render(); }
   });
