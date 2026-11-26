@@ -216,6 +216,16 @@ table.usr tr.inact td{opacity:.5}
 .pin-grande{font-size:34px;font-weight:700;letter-spacing:6px;text-align:center;padding:10px;background:var(--c-suave);border-radius:12px;margin:8px 0}
 .actv{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .menu-cta{display:flex;flex-direction:column;gap:8px}
+/* mis prospectos / mis tiendas */
+.ubic{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px solid var(--bd);margin-bottom:8px}
+.ubic .btn{padding:6px 10px;font-size:12.5px}
+.item.foco{outline:2px solid var(--c);outline-offset:-1px}
+.item .acc-v{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.item .acc-v .btn{padding:6px 10px;font-size:12.5px;text-decoration:none}
+.chips-filtro{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chips-filtro button{border:1px solid var(--bd);background:#fff;border-radius:99px;padding:6px 12px;font-size:13px;font-weight:600}
+.chips-filtro button.on{background:#0f172a;border-color:#0f172a;color:#fff}
+.mapa.chico{height:260px;margin-bottom:10px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:4000;background:#0f172a;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .toast.err{background:#991b1b}
 .pin{width:26px;height:26px;border-radius:50%;color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
@@ -337,16 +347,32 @@ table.usr tr.inact td{opacity:.5}
       <div class="kpi k-cie"><b id="v-k-cie">0</b><span>Cierres</span></div>
     </div>
     <div class="tabs" style="margin:14px 0 10px">
-      <button data-vt="hoy" class="on">Mi ruta de hoy</button>
-      <button data-vt="pros">Mis prospectos <span id="v-n-pros"></span></button>
+      <button data-vt="hoy" class="on">Hoy</button>
+      <button data-vt="pros">Prospectos <span id="v-n-pros"></span></button>
+      <button data-vt="hist">Mis tiendas</button>
     </div>
     <div id="vt-hoy">
       <div id="v-mapa" class="mapa"></div>
       <div id="v-lista-hoy" class="lista" style="margin-top:10px"></div>
     </div>
     <div id="vt-pros" class="hidden">
-      <p class="small mut" style="margin:0 0 8px">Tiendas que quedaron "en el aire". Solo puedes revisitarlas para cerrar la venta, y tienes que estar en el lugar.</p>
+      <p class="small mut" style="margin:0 0 8px">Tiendas que quedaron "en el aire", de la más cercana a la más lejana. Solo puedes revisitarlas para cerrar la venta, y tienes que estar en el lugar.</p>
+      <div class="ubic js-ubic"></div>
+      <div id="v-mapa-pros" class="mapa chico"></div>
       <div id="v-lista-pros" class="lista"></div>
+    </div>
+    <div id="vt-hist" class="hidden">
+      <p class="small mut" style="margin:0 0 8px">Todas las tiendas que has visitado y en qué quedó cada una.</p>
+      <div class="chips-filtro" id="v-hist-filtro">
+        <button data-hf="" class="on">Todas</button>
+        <button data-hf="prospecto">Prospectos</button>
+        <button data-hf="cierre">Cerradas</button>
+        <button data-hf="visita">Sin interés</button>
+      </div>
+      <input id="v-hist-buscar" placeholder="Buscar por nombre o dirección…" style="margin-bottom:8px;padding:10px">
+      <div class="ubic js-ubic"></div>
+      <div id="v-mapa-hist" class="mapa chico"></div>
+      <div id="v-lista-hist" class="lista"></div>
     </div>
     <div id="v-rechazadas" class="hidden" style="margin-top:12px"></div>
     <div class="fab-wrap"><button class="btn prim grande" id="v-nueva">＋ Registrar visita</button></div>
@@ -892,7 +918,7 @@ const Vendedor = {
     for (const it of this.pend) {
       const v = it.visita;
       if (v.tipo === 'nueva') mapa.set(v.id, {id: v.id, negocio: v.negocio, direccion: v.direccion, tipoPunto: v.tipoPunto, distrito: v.distrito, lat: v.lat, lng: v.lng,
-        estado: v.resultado, fotoUrl: it.foto, usuario: v.usuario, vendedor: v.vendedor, fecha: v.fecha, pendiente: true});
+        estado: v.resultado, fotoUrl: it.foto, usuario: v.usuario, vendedor: v.vendedor, fecha: v.fecha, fechaHora: v.fechaHora, pendiente: true});
       else if (mapa.has(v.puntoId)) mapa.get(v.puntoId).estado = v.resultado;
     }
     return [...mapa.values()];
@@ -932,16 +958,107 @@ const Vendedor = {
       </div>`).join('') : '<div class="vacio">Aún no registras visitas hoy.<br>Toca <b>＋ Registrar visita</b> en cada tienda.</div>';
     if (this.mapa) Mapas.encuadrar(this.mapa, Mapas.dibujar(this.mapa, this.capa, deHoy, {colorVendedor: () => CONFIG.COLOR}));
 
-    // prospectos
-    const pros = this.puntosLocales().filter(p => p.usuario === Sesion.s.usuario && p.estado === 'prospecto')
-      .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+    // prospectos e historial
+    const pros = this.misTiendas().filter(p => p.estado === 'prospecto');
     $('#v-n-pros').textContent = pros.length ? `(${pros.length})` : '';
-    $('#v-lista-pros').innerHTML = pros.length ? pros.map(p => `
-      <div class="item" style="cursor:default">
+    this.pintarUbic();
+    if (this.tab === 'pros') this.renderTiendas('pros');
+    if (this.tab === 'hist') this.renderTiendas('hist');
+  },
+
+  // ---------- Mis prospectos / Mis tiendas ----------
+  miPos: null, buscandoPos: false, filtroHist: '', mapas: {}, capas: {},
+  // tiendas registradas por mí o donde hice alguna visita, con su estado actual y su historial
+  misTiendas() {
+    const yo = Sesion.s.usuario, mias = this.misVisitas();
+    const porPunto = {};
+    for (const v of mias) (porPunto[v.tipo === 'nueva' ? v.id : v.puntoId] ||= []).push(v);
+    return this.puntosLocales().filter(p => p.usuario === yo || porPunto[p.id]).map(p => {
+      const vs = (porPunto[p.id] || []).sort((a, b) => a.fechaHora.localeCompare(b.fechaHora));
+      const ult = vs[vs.length - 1];
+      return {...p, nVisitas: Math.max(vs.length, 1), ultima: ult ? ult.fechaHora : (p.fechaHora || p.fecha + 'T00:00:00'),
+        d: this.miPos ? Math.round(distM(this.miPos, p)) : null};
+    });
+  },
+  ordenar(lista) {
+    return this.miPos ? lista.sort((a, b) => a.d - b.d) : lista.sort((a, b) => b.ultima.localeCompare(a.ultima));
+  },
+  pintarUbic() {
+    const p = this.miPos;
+    let html;
+    if (this.buscandoPos) html = '📡 Buscando tu ubicación…';
+    else if (p) html = `📍 Ordenadas por cercanía a tu ubicación (±${p.acc} m, ${horaDe(isoLocal(new Date(p.t)))}) <button class="btn sec" data-ubic="1">↻ Actualizar</button>`;
+    else html = `Activa el GPS para ordenarlas de la más cercana a la más lejana. <button class="btn sec" data-ubic="1">📍 Usar mi ubicación</button>`;
+    if (API.demo && !this.buscandoPos) html += ' <button class="btn sec" data-ubic-sim="1">Simular ubicación (demo)</button>';
+    $$('.js-ubic').forEach(e => e.innerHTML = html);
+  },
+  ubicar(forzar = false) {
+    if (this.buscandoPos || !navigator.geolocation) return;
+    if (!forzar && this.miPos && Date.now() - this.miPos.t < 120000) return;
+    this.buscandoPos = true; this.pintarUbic();
+    navigator.geolocation.getCurrentPosition(pos => {
+      this.buscandoPos = false;
+      this.miPos = {lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy), t: Date.now()};
+      this.render();
+    }, () => {
+      this.buscandoPos = false; this.pintarUbic();
+      if (forzar) toast('No se pudo obtener tu ubicación. Revisa que el GPS esté activo.', true);
+    }, {enableHighAccuracy: true, timeout: 12000, maximumAge: 60000});
+  },
+  simularUbic() {
+    const ps = this.misTiendas();
+    const base = ps.length ? ps[Math.floor(Math.random() * ps.length)] : {lat: CONFIG.CENTRO_MAPA[0], lng: CONFIG.CENTRO_MAPA[1]};
+    this.miPos = {lat: base.lat + 0.0015, lng: base.lng + 0.0008, acc: 10, t: Date.now()};
+    this.render();
+  },
+  renderTiendas(cual) {
+    let lista = this.misTiendas();
+    if (cual === 'pros') lista = lista.filter(p => p.estado === 'prospecto');
+    else {
+      if (this.filtroHist) lista = lista.filter(p => p.estado === this.filtroHist);
+      const q = normTxt($('#v-hist-buscar').value);
+      if (q) lista = lista.filter(p => normTxt(p.negocio + ' ' + p.direccion + ' ' + (p.distrito || '')).includes(q));
+    }
+    this.ordenar(lista);
+    const dist = d => d == null ? '' : d < 1000 ? `a ${d} m` : `a ${(d / 1000).toFixed(1)} km`;
+    const etiqueta = {prospecto: 'Prospecto en el aire', cierre: 'Cerrada', visita: 'Sin interés'};
+    const cont = $(cual === 'pros' ? '#v-lista-pros' : '#v-lista-hist');
+    cont.innerHTML = lista.length ? lista.map((p, i) => `
+      <div class="item" data-foco="${esc(p.id)}" data-cual="${cual}">
+        <div class="num" style="background:${RES[p.estado].c}">${i + 1}</div>
         ${imgFoto(p.fotoUrl)}
-        <div class="tx"><b>${esc(p.negocio)}</b><small>${esc(p.direccion)}</small><small>Registrada el ${esc(fechaCorta(p.fecha))}</small></div>
-        <button class="btn prim" data-revisitar="${esc(p.id)}" style="padding:10px 12px;font-size:13px" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>Revisitar</button>
-      </div>`).join('') : '<div class="vacio">No tienes prospectos en el aire. 🎉</div>';
+        <div class="tx"><b>${esc(p.negocio)}</b>
+          <small>${esc(p.direccion)}${p.distrito ? ' · ' + esc(p.distrito) : ''}</small>
+          <small>${p.d != null ? '<strong style="color:var(--tx)">' + dist(p.d) + '</strong> · ' : ''}Última visita ${esc(fechaCorta(p.ultima.slice(0, 10)))}${p.nVisitas > 1 ? ` · ${p.nVisitas} visitas` : ''}</small>
+          <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap"><span class="chip ${p.estado}">${etiqueta[p.estado]}</span>${p.tipoPunto ? `<span class="chip visita">${esc(p.tipoPunto)}</span>` : ''}${p.pendiente ? '<span class="chip pend">Pendiente de subir</span>' : ''}</div>
+          <div class="acc-v">
+            ${p.estado === 'prospecto' ? `<button class="btn prim" data-revisitar="${esc(p.id)}" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>Revisitar para cerrar</button>` : ''}
+            <a class="btn sec" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}">Cómo llegar ↗</a>
+          </div></div>
+      </div>`).join('')
+      : `<div class="vacio">${cual === 'pros' ? 'No tienes prospectos en el aire. 🎉' : 'No hay tiendas con ese filtro.'}</div>`;
+    // mapa
+    const elMapa = $(cual === 'pros' ? '#v-mapa-pros' : '#v-mapa-hist');
+    if (!this.mapas[cual]) { this.mapas[cual] = Mapas.crear(elMapa); if (this.mapas[cual]) this.capas[cual] = L.layerGroup().addTo(this.mapas[cual]); }
+    const m = this.mapas[cual]; if (!m) return;
+    m.invalidateSize();
+    const capa = this.capas[cual]; capa.clearLayers();
+    const pts = [];
+    lista.forEach((p, i) => {
+      L.marker([p.lat, p.lng], {icon: Mapas.icono(i + 1, RES[p.estado].c), title: p.negocio}).addTo(capa).on('click', () => this.enfocar(p.id, cual, false));
+      pts.push([p.lat, p.lng]);
+    });
+    if (this.miPos) {
+      L.circleMarker([this.miPos.lat, this.miPos.lng], {radius: 8, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1}).addTo(capa).bindTooltip('Tú estás aquí');
+      pts.push([this.miPos.lat, this.miPos.lng]);
+    }
+    Mapas.encuadrar(m, pts);
+  },
+  enfocar(id, cual, mover = true) {
+    const p = this.misTiendas().find(x => x.id === id); if (!p) return;
+    $$('#vt-' + cual + ' .item').forEach(e => e.classList.toggle('foco', e.dataset.foco === id));
+    if (mover && this.mapas[cual]) { this.mapas[cual].setView([p.lat, p.lng], 17); $('#v-mapa-' + cual).scrollIntoView({behavior: 'smooth', block: 'center'}); }
+    if (!mover) { const it = $(`#vt-${cual} .item[data-foco="${CSS.escape(id)}"]`); if (it) it.scrollIntoView({behavior: 'smooth', block: 'center'}); }
   }
 };
 
@@ -1886,6 +2003,7 @@ function arrancar() {
 }
 function salir() {
   Supervisor.detener(); Sesion.cerrar(); $('#modal').classList.add('hidden'); mostrar('login');
+  Vendedor.miPos = null; $('[data-vt="hoy"]').click();
 }
 
 function init() {
@@ -1929,10 +2047,19 @@ function init() {
     $$('[data-vt]').forEach(x => x.classList.toggle('on', x === b));
     $('#vt-hoy').classList.toggle('hidden', b.dataset.vt !== 'hoy');
     $('#vt-pros').classList.toggle('hidden', b.dataset.vt !== 'pros');
+    $('#vt-hist').classList.toggle('hidden', b.dataset.vt !== 'hist');
     if (b.dataset.vt === 'hoy' && Vendedor.mapa) setTimeout(() => Vendedor.mapa.invalidateSize(), 50);
+    if (b.dataset.vt !== 'hoy') { Vendedor.renderTiendas(b.dataset.vt); Vendedor.ubicar(); }
   }));
   $('#v-nueva').addEventListener('click', () => Form.abrir('nueva'));
+  $('#v-hist-buscar').addEventListener('input', () => Vendedor.renderTiendas('hist'));
   $('#vend').addEventListener('click', async e => {
+    if (e.target.closest('[data-ubic]')) return Vendedor.ubicar(true);
+    if (e.target.closest('[data-ubic-sim]')) return Vendedor.simularUbic();
+    const hf = e.target.closest('[data-hf]');
+    if (hf) { Vendedor.filtroHist = hf.dataset.hf; $$('[data-hf]').forEach(x => x.classList.toggle('on', x === hf)); return Vendedor.renderTiendas('hist'); }
+    const fo = e.target.closest('[data-foco]');
+    if (fo && !e.target.closest('button, a')) return Vendedor.enfocar(fo.dataset.foco, fo.dataset.cual);
     const r = e.target.closest('[data-revisitar]');
     if (r) { const p = Vendedor.puntosLocales().find(x => x.id === r.dataset.revisitar); if (p) Form.abrir('revisita', p); }
     const d = e.target.closest('[data-desc]');
