@@ -996,11 +996,14 @@ const Vendedor = {
     if (this.buscandoPos || !navigator.geolocation) return;
     if (!forzar && this.miPos && Date.now() - this.miPos.t < 120000) return;
     this.buscandoPos = true; this.pintarUbic();
+    this.simulada = false;
     navigator.geolocation.getCurrentPosition(pos => {
+      if (this.simulada) return; // el vendedor eligió simular mientras se buscaba
       this.buscandoPos = false;
       this.miPos = {lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy), t: Date.now()};
       this.render();
     }, () => {
+      if (this.simulada) return;
       this.buscandoPos = false; this.pintarUbic();
       if (forzar) toast('No se pudo obtener tu ubicación. Revisa que el GPS esté activo.', true);
     }, {enableHighAccuracy: true, timeout: 12000, maximumAge: 60000});
@@ -1008,6 +1011,7 @@ const Vendedor = {
   simularUbic() {
     const ps = this.misTiendas();
     const base = ps.length ? ps[Math.floor(Math.random() * ps.length)] : {lat: CONFIG.CENTRO_MAPA[0], lng: CONFIG.CENTRO_MAPA[1]};
+    this.buscandoPos = false; this.simulada = true;
     this.miPos = {lat: base.lat + 0.0015, lng: base.lng + 0.0008, acc: 10, t: Date.now()};
     this.render();
   },
