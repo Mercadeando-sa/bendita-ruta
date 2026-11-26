@@ -224,6 +224,11 @@ table.rank tr.clic{cursor:pointer} table.rank tr.clic:hover td{background:#f8faf
         <button class="btn sec" data-u="miguel" data-p="3333">Miguel<br><small class="mut">vendedor</small></button>
         <button class="btn prim" data-u="supervisor" data-p="1234">Tomás<br><small style="opacity:.85">supervisor</small></button>
       </div>
+      <div class="small mut" style="margin:14px 0 6px;text-align:center">Desde cero (sin datos de ejemplo) · PIN 2026</div>
+      <div class="demo-users">
+        <button class="btn sec" data-u="juanjo" data-p="2026">Juanjo Demo<br><small class="mut">vendedor</small></button>
+        <button class="btn prim" data-u="arthur" data-p="2026">Arthur Demo<br><small style="opacity:.85">supervisor</small></button>
+      </div>
       <button id="demo-reset" class="btn sec" style="width:100%;margin-top:10px;font-size:13px">Reiniciar datos de la demo</button>
     </div>
   </div>
@@ -1171,7 +1176,10 @@ const Demo = {
     {usuario: 'carla', pin: '1111', nombre: 'Carla Ramos', rol: 'vendedor'},
     {usuario: 'jorge', pin: '2222', nombre: 'Jorge Quispe', rol: 'vendedor'},
     {usuario: 'miguel', pin: '3333', nombre: 'Miguel Torres', rol: 'vendedor'},
-    {usuario: 'supervisor', pin: '1234', nombre: 'Tomás', rol: 'supervisor'}
+    {usuario: 'supervisor', pin: '1234', nombre: 'Tomás', rol: 'supervisor'},
+    // "desde cero": no ven los datos de ejemplo, solo lo que registren ellos
+    {usuario: 'juanjo', pin: '2026', nombre: 'Juanjo Demo', rol: 'vendedor', limpio: true},
+    {usuario: 'arthur', pin: '2026', nombre: 'Arthur Demo', rol: 'supervisor', limpio: true}
   ],
   K_VIS: 'rc_demo_visitas', K_REV: 'rc_demo_revisiones',
   leer(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
@@ -1180,17 +1188,22 @@ const Demo = {
     if (!x) { const e = new Error('Usuario o PIN incorrecto'); e.servidor = true; throw e; }
     return {usuario: x.usuario, nombre: x.nombre, rol: x.rol};
   },
-  todas() { return [...this.semilla(), ...this.leer(this.K_VIS)]; },
+  esLimpio(u) { return !!this.USUARIOS.find(x => x.usuario === u)?.limpio; },
+  todas(limpio = false) {
+    const propias = this.leer(this.K_VIS).filter(v => this.esLimpio(v.usuario) === limpio);
+    return limpio ? propias : [...this.semilla(), ...propias];
+  },
   async call(accion, d) {
     await sleep(200);
     const s = Sesion.s || {};
     const user = accion === 'login' ? this.auth(d.usuario, d.pin) : this.auth(s.usuario, s.pin);
     const err = m => { const e = new Error(m); e.servidor = true; throw e; };
     if (accion === 'login') return user;
+    const limpio = this.esLimpio(user.usuario);
     if (accion === 'guardarVisita') {
       if (user.rol !== 'vendedor') err('Solo los vendedores registran visitas');
       const v = {...d.visita, usuario: user.usuario, vendedor: user.nombre};
-      const todas = this.todas();
+      const todas = this.todas(limpio);
       if (todas.some(x => x.id === v.id)) return {id: v.id, repetida: true};
       const problema = validarVisita(v, construirPuntos(todas, this.leer(this.K_REV)));
       if (problema) err(problema);
@@ -1201,7 +1214,7 @@ const Demo = {
       return {id: v.id, fotoUrl: v.fotoUrl};
     }
     if (accion === 'vendedorDatos') {
-      const todas = this.todas(); const pts = construirPuntos(todas, this.leer(this.K_REV));
+      const todas = this.todas(limpio); const pts = construirPuntos(todas, this.leer(this.K_REV));
       const desde = sumarDias(hoyISO(), -60);
       return {
         puntos: [...pts.values()].filter(p => !p.anulado).map(p => ({id: p.id, negocio: p.base.negocio, direccion: p.base.direccion,
@@ -1211,8 +1224,8 @@ const Demo = {
     }
     if (accion === 'supervisorDatos') {
       if (user.rol !== 'supervisor') err('Solo para supervisores');
-      return {visitas: this.todas(), revisiones: this.leer(this.K_REV),
-        vendedores: this.USUARIOS.filter(u => u.rol === 'vendedor').map(({usuario, nombre}) => ({usuario, nombre}))};
+      return {visitas: this.todas(limpio), revisiones: this.leer(this.K_REV),
+        vendedores: this.USUARIOS.filter(u => u.rol === 'vendedor' && !!u.limpio === limpio).map(({usuario, nombre}) => ({usuario, nombre}))};
     }
     if (accion === 'revisarPar') {
       if (user.rol !== 'supervisor') err('Solo para supervisores');
@@ -1224,6 +1237,12 @@ const Demo = {
     err('Acción desconocida');
   },
   reiniciar() { localStorage.removeItem(this.K_VIS); localStorage.removeItem(this.K_REV); this._semilla = null; },
+  // cada día cambian los datos de ejemplo: se borra lo hecho sobre ellos, pero se conserva lo de los usuarios "desde cero"
+  reiniciarDia() {
+    localStorage.setItem(this.K_VIS, JSON.stringify(this.leer(this.K_VIS).filter(v => this.esLimpio(v.usuario))));
+    localStorage.setItem(this.K_REV, JSON.stringify(this.leer(this.K_REV).filter(r => !String(r.idA).startsWith('demo') && !String(r.idB).startsWith('demo'))));
+    this._semilla = null;
+  },
 
   // ---------- datos de ejemplo (se regeneran igual cada día) ----------
   _semilla: null,
@@ -1365,7 +1384,7 @@ function init() {
   $$('.js-empresa').forEach(e => e.textContent = CONFIG.EMPRESA);
   if (CONFIG.LOGO) { $('#login .logo').outerHTML = `<img class="logo-img" src="${CONFIG.LOGO}" alt="${esc(CONFIG.NOMBRE_APP)}">`; $('#login h2').classList.add('hidden'); }
   if (CONFIG.LOGO_BLANCO) $$('.top .tit b.js-nombre-app').forEach(b => b.outerHTML = `<img class="top-logo" src="${CONFIG.LOGO_BLANCO}" alt="${esc(CONFIG.NOMBRE_APP)}">`);
-  if (API.demo && localStorage.getItem('rc_demo_dia') !== hoyISO()) { Demo.reiniciar(); localStorage.setItem('rc_demo_dia', hoyISO()); }
+  if (API.demo && localStorage.getItem('rc_demo_dia') !== hoyISO()) { Demo.reiniciarDia(); localStorage.setItem('rc_demo_dia', hoyISO()); }
   if (API.demo) { $('#login-demo').classList.remove('hidden'); $$('.js-demo').forEach(e => e.classList.remove('hidden')); }
   const opts = (sel, arr, ph) => $(sel).innerHTML = `<option value="">${ph}</option>` + arr.map(x => `<option>${esc(x)}</option>`).join('');
   opts('#f-tipovia', CONFIG.TIPOS_VIA, 'Elegir…'); opts('#f-cargo', CONFIG.CARGOS, 'Sin especificar');
