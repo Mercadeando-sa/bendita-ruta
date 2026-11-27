@@ -1,0 +1,17 @@
+{
+  "name": "Bendita Paleta · Ruta de ventas",
+  "short_name": "Bendita Ruta",
+  "description": "Seguimiento de visitas, prospectos y cierres de los vendedores de Bendita Paleta.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FDEEF1",
+  "theme_color": "#D61F3F",
+  "lang": "es-PE",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
