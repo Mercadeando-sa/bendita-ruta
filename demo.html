@@ -1,0 +1,2255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#D61F3F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bendita Ruta">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="application-name" content="Bendita Ruta">
+<meta name="description" content="Seguimiento de visitas, prospectos y cierres de los vendedores de Bendita Paleta.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Bendita Paleta · Ruta de ventas">
+<meta property="og:description" content="Seguimiento de visitas, prospectos y cierres de los vendedores.">
+<meta property="og:image" content="https://mercadeando-sa.github.io/bendita-ruta/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://mercadeando-sa.github.io/bendita-ruta/">
+<meta name="twitter:card" content="summary_large_image">
+<title>Bendita Paleta · Ruta de ventas (demo)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* =====================================================================
+   CONFIGURACIÓN — lo único que normalmente hay que tocar
+   ===================================================================== */
+const CONFIG = {
+  NOMBRE_APP: 'Bendita Paleta · Ruta de ventas',
+  EMPRESA: 'Ruta de ventas · Paletería artesanal',
+  COLOR: '#D61F3F',                 // rojo Bendita Paleta
+  COLOR_SUAVE: '#FDEEF1',           // rosado de fondos
+  FUENTE: 'Comfortaa',
+  LOGO: 'logo-rojo.png',           // archivo junto a index.html
+  LOGO_BLANCO: 'logo-blanco.png',  // archivo junto a index.html
+
+  // URL de la aplicación web de Apps Script. Vacío = MODO DEMO (datos de ejemplo en este navegador)
+  API_URL: '',
+
+  PRECISION_MAX_M: 50,      // si el GPS es menos preciso que esto, no deja registrar
+  RADIO_CERCANIA_M: 40,     // tiendas registradas a esta distancia se muestran como "cerca"
+  RADIO_REVISITA_M: 100,    // para revisitar hay que estar a menos de esta distancia de la tienda
+  RADIO_DUPLICADO_M: 25,    // posible duplicado: tiendas a esta distancia y con nombre parecido
+  REFRESCO_SUPERVISOR_S: 60,
+  CENTRO_MAPA: [-12.0905, -77.0345],
+
+  // Listas iniciales: el administrador puede cambiarlas desde su panel ("Listas desplegables")
+  CANALES: ['Tiendas / bodegas', 'Clubs', 'Universidades', 'Hoteles'],
+  DISTRITOS: ['Ancón', 'Ate', 'Barranco', 'Breña', 'Carabayllo', 'Cercado de Lima', 'Chaclacayo', 'Chorrillos', 'Cieneguilla', 'Comas',
+    'El Agustino', 'Independencia', 'Jesús María', 'La Molina', 'La Victoria', 'Lince', 'Los Olivos', 'Lurigancho-Chosica', 'Lurín',
+    'Magdalena del Mar', 'Miraflores', 'Pachacámac', 'Pucusana', 'Pueblo Libre', 'Puente Piedra', 'Punta Hermosa', 'Punta Negra', 'Rímac',
+    'San Bartolo', 'San Borja', 'San Isidro', 'San Juan de Lurigancho', 'San Juan de Miraflores', 'San Luis', 'San Martín de Porres',
+    'San Miguel', 'Santa Anita', 'Santa María del Mar', 'Santa Rosa', 'Santiago de Surco', 'Surquillo', 'Villa El Salvador',
+    'Villa María del Triunfo', 'Callao', 'Bellavista', 'Carmen de la Legua Reynoso', 'La Perla', 'La Punta', 'Mi Perú', 'Ventanilla'],
+  TIPOS_VIA: ['Avenida', 'Calle', 'Jirón', 'Pasaje', 'Otro'],
+  CARGOS: ['Dueño(a)', 'Familiar del dueño', 'Encargado(a)', 'Empleado(a)', 'Otro'],
+  CONGELADORAS: [
+    'Congeladora pequeña · 160 L',
+    'Congeladora grande · 260 L',
+    'Sin congeladora (usa la suya)',
+    'No se llegó a ofrecer'
+  ],
+  MOTIVOS: [
+    'Debe consultarlo con el dueño / familia',
+    'No tiene espacio para la congeladora',
+    'Nos faltaron congeladoras',
+    'Ya vende otra marca de helados',
+    'No hubo tiempo para cerrar',
+    'Quiere pensarlo / volver otro día',
+    'Otro'
+  ]
+};
+</script>
+<style>
+:root{--c:#0f766e;--c-suave:#ecfdf5;--bg:#f3f5f7;--card:#fff;--tx:#0f172a;--mut:#64748b;--bd:#e2e8f0;
+  --vis:#64748b;--pro:#d97706;--cie:#16a34a;--err:#dc2626;--r:14px}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx);font-size:15px;-webkit-tap-highlight-color:transparent}
+.hidden{display:none!important}
+h1,h2,h3{margin:0}
+h2{font-size:18px} h3{font-size:15px}
+.mut{color:var(--mut)} .small{font-size:13px}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit;width:100%;padding:12px;border:1px solid var(--bd);border-radius:10px;background:#fff;color:var(--tx)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--c);outline-offset:-1px}
+label.f{display:block;font-weight:600;font-size:13px;margin:14px 0 6px}
+label.f .opc{font-weight:400;color:var(--mut)}
+.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:600;background:#e2e8f0;color:var(--tx)}
+.btn.prim{background:var(--c);color:#fff}
+.btn.sec{background:#fff;border:1px solid var(--bd)}
+.btn.peligro{background:#fee2e2;color:#991b1b}
+.btn.grande{width:100%;padding:16px;font-size:17px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-ico{background:none;border:0;color:inherit;font-size:20px;padding:6px 8px;border-radius:8px}
+.card{background:var(--card);border-radius:var(--r);padding:14px;box-shadow:0 1px 2px rgba(15,23,42,.06);border:1px solid var(--bd)}
+.top{position:sticky;top:0;z-index:900;background:var(--c);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px}
+.top .tit{flex:1;min-width:0}
+.top .tit b{display:block;font-size:16px}
+.top .tit span{font-size:12px;opacity:.85}
+.demo-banner{background:#fef3c7;color:#78350f;font-size:12.5px;padding:6px 14px;text-align:center}
+.wrap{max-width:720px;margin:0 auto;padding:14px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.chip.visita{background:#f1f5f9;color:#334155}
+.chip.prospecto{background:#fef3c7;color:#92400e}
+.chip.cierre{background:#dcfce7;color:#166534}
+.chip.rev{background:#e0e7ff;color:#3730a3}
+.chip.pend{background:#fee2e2;color:#991b1b}
+.chip.anul{background:#e5e7eb;color:#374151;text-decoration:line-through}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+
+/* login */
+#login{background:var(--c-suave);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+#login .card{width:100%;max-width:380px;padding:24px}
+.logo{width:64px;height:64px;border-radius:18px;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 12px}
+.logo-img{display:block;width:220px;max-width:80%;height:auto;margin:0 auto 10px}
+.top-logo{display:block;height:42px;width:auto}
+.demo-users{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.demo-users button{font-size:13px;padding:10px}
+
+/* vendedor */
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:10px;text-align:center}
+.kpi b{display:block;font-size:26px;line-height:1.1}
+.kpi span{font-size:12px;color:var(--mut)}
+.kpi.k-vis b{color:var(--vis)} .kpi.k-pro b{color:var(--pro)} .kpi.k-cie b{color:var(--cie)} .kpi.k-air b{color:#b45309}
+.syncbar{display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 12px;border-radius:10px;background:#ecfdf5;color:#065f46;margin-bottom:10px}
+.syncbar.pend{background:#fff7ed;color:#9a3412}
+.syncbar.err{background:#fef2f2;color:#991b1b}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.tabs button{border:1px solid var(--bd);background:#fff;border-radius:99px;padding:8px 14px;font-weight:600;font-size:13.5px;white-space:nowrap;color:var(--tx)}
+.tabs button.on{background:var(--c);border-color:var(--c);color:#fff}
+.tabs button.warn{border-color:#f59e0b}
+.tabs button.warn.on{background:#d97706;border-color:#d97706}
+.lista{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:10px;cursor:pointer}
+.item img,.item .noimg{width:52px;height:52px;border-radius:9px;object-fit:cover;flex-shrink:0;background:#e2e8f0}
+.item .tx{flex:1;min-width:0}
+.item .tx b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .tx small{color:var(--mut);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .num{width:26px;height:26px;border-radius:50%;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.vacio{text-align:center;color:var(--mut);padding:28px 10px}
+.mapa{height:300px;border-radius:var(--r);border:1px solid var(--bd);overflow:hidden;background:#e5e7eb}
+.fab-wrap{position:sticky;bottom:0;padding:12px 0 calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 35%)}
+
+/* hoja / formulario */
+.sheet{position:fixed;inset:0;z-index:2000;background:var(--bg);overflow-y:auto}
+.sheet-head{position:sticky;top:0;z-index:5;background:var(--c);color:#fff;display:flex;align-items:center;gap:8px;padding:10px 12px}
+.sheet-body{max-width:640px;margin:0 auto;padding:14px 14px 40px;display:flex;flex-direction:column;gap:12px}
+.gps{display:flex;align-items:center;gap:10px;font-weight:600}
+.gps .ico{font-size:22px}
+.gps.ok{color:#166534} .gps.mal{color:var(--err)} .gps.busca{color:var(--mut)}
+.minimapa{height:150px;border-radius:10px;margin-top:10px;overflow:hidden;background:#e5e7eb}
+.foto-box{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;border:2px dashed #cbd5e1;border-radius:12px;min-height:150px;background:#fff;cursor:pointer;overflow:hidden;color:var(--mut);text-align:center}
+.foto-box img{width:100%;max-height:260px;object-fit:cover}
+.resultados{display:grid;gap:8px}
+.res-op{display:flex;gap:10px;align-items:center;border:2px solid var(--bd);border-radius:12px;padding:12px;background:#fff;cursor:pointer}
+.res-op input{width:auto;margin:0}
+.res-op b{display:block}
+.res-op small{color:var(--mut)}
+.res-op.sel.visita{border-color:var(--vis);background:#f8fafc}
+.res-op.sel.prospecto{border-color:var(--pro);background:#fffbeb}
+.res-op.sel.cierre{border-color:var(--cie);background:#f0fdf4}
+.cerca-op{display:flex;gap:10px;align-items:center;border:1px solid var(--bd);border-radius:12px;padding:10px;margin-bottom:8px;background:#fff}
+.cerca-op img{width:64px;height:64px;border-radius:8px;object-fit:cover}
+.cerca-op .tx{flex:1;min-width:0}
+.aviso{padding:10px 12px;border-radius:10px;font-size:13.5px}
+.aviso.amar{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+.aviso.rojo{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.aviso.azul{background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe}
+
+/* supervisor */
+.sup-wrap{max-width:1280px;margin:0 auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.filtros{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.filtros input[type=date]{width:auto;padding:8px 10px}
+.filtros .btn{padding:8px 12px;font-size:13.5px}
+.filtros .btn.on{background:var(--c);color:#fff}
+.kpis5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.kpis5 .kpi b{font-size:30px}
+.kpi small{display:block;font-size:11px;color:var(--mut);margin-top:2px}
+.sup-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:12px;align-items:start}
+.sup-grid .mapa{height:560px}
+.mapa-ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;font-size:13px}
+.mapa-ctrl label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.mapa-ctrl input{width:auto}
+.leyenda{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
+.leyenda span{display:flex;align-items:center;gap:5px}
+.panel-lista{max-height:560px;overflow-y:auto}
+table.rank{width:100%;border-collapse:collapse;font-size:13.5px}
+table.rank th{text-align:right;font-size:11.5px;color:var(--mut);font-weight:600;padding:6px 6px;border-bottom:1px solid var(--bd)}
+table.rank th:first-child,table.rank td:first-child{text-align:left}
+table.rank td{text-align:right;padding:9px 6px;border-bottom:1px solid #f1f5f9}
+table.rank tr.clic{cursor:pointer} table.rank tr.clic:hover td{background:#f8fafc}
+.dias{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.dias button{border:1px solid var(--bd);background:#fff;border-radius:10px;padding:6px 10px;font-size:12.5px;white-space:nowrap}
+.dias button.on{background:#0f172a;color:#fff;border-color:#0f172a}
+.dup{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dup .lado{border:1px solid var(--bd);border-radius:12px;overflow:hidden;background:#fff}
+.dup .lado img{width:100%;aspect-ratio:4/3;height:auto;max-height:280px;object-fit:cover;display:block;background:#e2e8f0}
+.dup .lado .tx{padding:10px;font-size:13px}
+.dup-acc{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.modal{position:fixed;inset:0;z-index:3000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal .card{width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:0}
+.modal img.grande{width:100%;max-height:320px;object-fit:cover;display:block;border-radius:var(--r) var(--r) 0 0;background:#e2e8f0}
+.modal .cuerpo{padding:16px}
+.ficha{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:14px;margin-top:10px}
+.ficha dt{color:var(--mut)} .ficha dd{margin:0}
+.hist{margin-top:12px;border-left:2px solid var(--bd);padding-left:12px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+/* pantalla PIN y administrador */
+#pinscreen{background:var(--c-suave);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+#pinscreen .card{width:100%;max-width:380px;padding:24px}
+table.usr{width:100%;border-collapse:collapse;font-size:13.5px;min-width:860px}
+table.usr th{text-align:left;font-size:11.5px;color:var(--mut);font-weight:600;padding:10px;border-bottom:1px solid var(--bd);background:#f8fafc}
+table.usr td{padding:10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+table.usr tr.inact td{opacity:.5}
+.acc{display:flex;gap:6px;flex-wrap:wrap}
+.acc .btn{padding:6px 10px;font-size:12.5px}
+.chip.rol-vendedor{background:#e0f2fe;color:#075985}
+.chip.rol-supervisor{background:#ede9fe;color:#5b21b6}
+.chip.rol-admin{background:#fee2e2;color:#991b1b}
+.checks{display:flex;flex-wrap:wrap;gap:6px}
+.checks label{display:flex;align-items:center;gap:6px;border:1px solid var(--bd);border-radius:99px;padding:6px 10px;font-size:13px;cursor:pointer;background:#fff}
+.checks label:has(input:checked){border-color:var(--c);background:var(--c-suave)}
+.checks input{width:auto;margin:0}
+.caja-lista{max-height:190px;overflow-y:auto;border:1px solid var(--bd);border-radius:10px;padding:8px}
+.listas-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:12px 0}
+.listas-grid textarea{min-height:220px;font-size:13.5px}
+.pin-grande{font-size:34px;font-weight:700;letter-spacing:6px;text-align:center;padding:10px;background:var(--c-suave);border-radius:12px;margin:8px 0}
+.actv{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.menu-cta{display:flex;flex-direction:column;gap:8px}
+/* mis prospectos / mis tiendas */
+.ubic{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px solid var(--bd);margin-bottom:8px}
+.ubic .btn{padding:6px 10px;font-size:12.5px}
+.item.foco{outline:2px solid var(--c);outline-offset:-1px}
+.item .acc-v{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.item .acc-v .btn{padding:6px 10px;font-size:12.5px;text-decoration:none}
+.chips-filtro{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chips-filtro button{border:1px solid var(--bd);background:#fff;border-radius:99px;padding:6px 12px;font-size:13px;font-weight:600}
+.chips-filtro button.on{background:#0f172a;border-color:#0f172a;color:#fff}
+.mapa.chico{height:260px;margin-bottom:10px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:4000;background:#0f172a;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast.err{background:#991b1b}
+.pin{width:26px;height:26px;border-radius:50%;color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.pin.rev{border:2px dashed #fff;outline:2px solid #4338ca}
+.leaflet-div-icon.mk{background:none;border:0}
+.mapa-error{display:flex;align-items:center;justify-content:center;height:100%;color:var(--mut);font-size:13px;text-align:center;padding:16px}
+@media (max-width:900px){
+  .sup-grid{grid-template-columns:1fr}
+  .sup-grid .mapa{height:420px}
+  .kpis5{grid-template-columns:repeat(3,1fr)}
+  .panel-lista{max-height:none}
+}
+@media (max-width:480px){.dup{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login">
+  <div class="card">
+    <div class="logo">📍</div>
+    <h2 style="text-align:center" class="js-nombre-app">Ruta de Campo</h2>
+    <p class="mut small js-empresa" style="text-align:center;margin:4px 0 16px"></p>
+    <form id="login-form">
+      <label class="f" for="l-usuario">Usuario</label>
+      <input id="l-usuario" autocomplete="username" autocapitalize="none" required>
+      <label class="f" for="l-pin">PIN</label>
+      <input id="l-pin" type="password" inputmode="numeric" autocomplete="current-password" required>
+      <button class="btn prim grande" style="margin-top:16px">Ingresar</button>
+    </form>
+    <div id="login-demo" class="hidden" style="margin-top:18px">
+      <div class="aviso amar">Modo demo: datos de ejemplo guardados solo en este navegador. Entra con un clic:</div>
+      <div class="small mut" style="margin:12px 0 6px;text-align:center">Vendedores</div>
+      <div class="demo-users">
+        <button class="btn sec" data-u="carla" data-p="1111">Carla Ramos<br><small class="mut">con historial</small></button>
+        <button class="btn sec" data-u="juanjo" data-p="2026">Juanjo Demo<br><small class="mut">desde cero</small></button>
+      </div>
+      <div class="small mut" style="margin:12px 0 6px;text-align:center">Supervisores y administrador</div>
+      <div class="demo-users" style="grid-template-columns:1fr 1fr 1fr">
+        <button class="btn prim" data-u="supervisor" data-p="1234">Tomás<br><small style="opacity:.85">supervisor</small></button>
+        <button class="btn prim" data-u="arthur" data-p="2026">Arthur Demo<br><small style="opacity:.85">supervisor</small></button>
+        <button class="btn prim" data-u="admin" data-p="2026" style="background:#0f172a">Admin Demo<br><small style="opacity:.85">administrador</small></button>
+      </div>
+      <button id="demo-reset" class="btn sec" style="width:100%;margin-top:10px;font-size:13px">Reiniciar datos de la demo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CAMBIO DE PIN ============ -->
+<div id="pinscreen" class="hidden">
+  <div class="card">
+    <div class="logo">🔒</div>
+    <h2 style="text-align:center">Crea tu PIN personal</h2>
+    <p class="mut small" id="pin-intro" style="text-align:center;margin:6px 0 4px"></p>
+    <form id="pin-form">
+      <label class="f" for="pin-1">Nuevo PIN (6 números)</label>
+      <input id="pin-1" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" required>
+      <label class="f" for="pin-2">Repite el PIN</label>
+      <input id="pin-2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" required>
+      <button class="btn prim grande" style="margin-top:16px">Guardar mi PIN</button>
+    </form>
+    <button id="pin-cancelar" class="btn sec hidden" style="width:100%;margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ============ ADMINISTRADOR ============ -->
+<div id="adm" class="hidden">
+  <div class="top">
+    <div class="tit"><b class="js-nombre-app"></b><span id="a-nombre"></span></div>
+    <button class="btn-ico" id="a-seguimiento" style="font-size:14px;font-weight:600">Seguimiento</button>
+    <button class="btn-ico" id="a-menu" style="font-size:14px;font-weight:600">Cuenta</button>
+  </div>
+  <div class="demo-banner js-demo hidden">Modo demo: los usuarios que crees aquí se guardan solo en este navegador (espacio "desde cero").</div>
+  <div class="sup-wrap">
+    <div class="tabs">
+      <button data-at="usuarios" class="on">Usuarios</button>
+      <button data-at="listas">Listas desplegables</button>
+    </div>
+    <div id="at-usuarios">
+      <div class="filtros" style="margin-bottom:10px">
+        <button class="btn prim" id="a-nuevo">＋ Nuevo usuario</button>
+        <select id="a-f-rol" style="width:auto;padding:8px 10px">
+          <option value="">Todos los roles</option><option value="vendedor">Vendedores</option>
+          <option value="supervisor">Supervisores</option><option value="admin">Administradores</option>
+        </select>
+        <input id="a-buscar" placeholder="Buscar por nombre o usuario…" style="width:auto;flex:1;min-width:180px;padding:8px 10px">
+        <label class="small" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="a-f-inact" style="width:auto"> Mostrar desactivados</label>
+      </div>
+      <div id="a-resumen" class="small mut" style="margin-bottom:8px"></div>
+      <div id="a-lista" class="card" style="padding:0;overflow-x:auto"></div>
+    </div>
+    <div id="at-listas" class="hidden">
+      <div class="aviso azul">Estas listas aparecen como opciones desplegables en la app. Escribe una opción por línea. Si cambias o quitas una opción, las visitas ya registradas no cambian.</div>
+      <div class="listas-grid">
+        <div class="card"><h3>Tipos de punto</h3><p class="small mut" style="margin:4px 0 8px">Se asignan a cada vendedor y aparecen en la ficha de visita.</p><textarea id="a-l-canales"></textarea></div>
+        <div class="card"><h3>Distritos</h3><p class="small mut" style="margin:4px 0 8px">Se asignan a cada vendedor. El GPS sugiere el distrito.</p><textarea id="a-l-distritos"></textarea></div>
+        <div class="card"><h3>Congeladoras</h3><p class="small mut" style="margin:4px 0 8px">Opciones de "Congeladora ofrecida".</p><textarea id="a-l-congeladoras"></textarea></div>
+        <div class="card"><h3>Motivos de no cierre</h3><p class="small mut" style="margin:4px 0 8px">Opciones cuando la visita queda como prospecto.</p><textarea id="a-l-motivos"></textarea></div>
+      </div>
+      <button class="btn prim" id="a-l-guardar">Guardar listas</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VENDEDOR ============ -->
+<div id="vend" class="hidden">
+  <div class="top">
+    <div class="tit"><b class="js-nombre-app"></b><span id="v-nombre"></span></div>
+    <button class="btn-ico" id="v-menu" title="Menú">⋯</button>
+  </div>
+  <div class="demo-banner js-demo hidden">Modo demo · <label style="cursor:pointer"><input type="checkbox" id="v-offline" style="width:auto;vertical-align:middle"> simular "sin señal"</label></div>
+  <div class="wrap">
+    <div id="v-sync" class="syncbar">✓ Todo subido</div>
+    <div class="small mut" style="margin:2px 0 8px" id="v-fecha"></div>
+    <div class="kpis">
+      <div class="kpi k-vis"><b id="v-k-vis">0</b><span>Visitados hoy</span></div>
+      <div class="kpi k-pro"><b id="v-k-pro">0</b><span>Prospectos</span></div>
+      <div class="kpi k-cie"><b id="v-k-cie">0</b><span>Cierres</span></div>
+    </div>
+    <div class="tabs" style="margin:14px 0 10px">
+      <button data-vt="hoy" class="on">Mi ruta de hoy</button>
+      <button data-vt="hist">Mis tiendas <span id="v-n-pros"></span></button>
+    </div>
+    <div id="vt-hoy">
+      <div id="v-mapa" class="mapa"></div>
+      <div id="v-lista-hoy" class="lista" style="margin-top:10px"></div>
+    </div>
+    <div id="vt-hist" class="hidden">
+      <div class="chips-filtro" id="v-hist-filtro">
+        <button data-hf="prospecto" class="on">Prospectos</button>
+        <button data-hf="cierre">Cerradas</button>
+        <button data-hf="visita">Sin interés</button>
+        <button data-hf="">Todas</button>
+      </div>
+      <p class="small mut" style="margin:0 0 8px" id="v-hist-ayuda"></p>
+      <input id="v-hist-buscar" placeholder="Buscar por nombre o dirección…" style="margin-bottom:8px;padding:10px">
+      <div class="ubic js-ubic"></div>
+      <div id="v-mapa-hist" class="mapa chico"></div>
+      <div id="v-lista-hist" class="lista"></div>
+    </div>
+    <div id="v-rechazadas" class="hidden" style="margin-top:12px"></div>
+    <div class="fab-wrap"><button class="btn prim grande" id="v-nueva">＋ Registrar visita</button></div>
+  </div>
+</div>
+
+<!-- ============ FORMULARIO DE VISITA ============ -->
+<div id="form" class="sheet hidden">
+  <div class="sheet-head">
+    <button class="btn-ico" id="f-cerrar" title="Cerrar">✕</button>
+    <h2 id="f-titulo">Nueva visita</h2>
+  </div>
+  <div class="sheet-body">
+    <section class="card" id="f-gps-card">
+      <div class="gps busca" id="f-gps"><span class="ico">📡</span><span id="f-gps-txt">Buscando tu ubicación…</span></div>
+      <div class="small mut" id="f-gps-sub" style="margin-top:4px">La ubicación y la hora se registran automáticamente y no se pueden cambiar.</div>
+      <div id="f-minimapa" class="minimapa hidden"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn sec hidden" id="f-gps-retry" type="button">↻ Volver a intentar</button>
+        <button class="btn sec hidden js-demo-gps" data-sim="nuevo" type="button">Simular GPS: lugar nuevo (demo)</button>
+        <button class="btn sec hidden js-demo-gps" data-sim="cerca" type="button">Simular GPS: junto a una tienda registrada (demo)</button>
+      </div>
+    </section>
+
+    <section class="card hidden" id="f-cerca">
+      <h3>Hay tiendas registradas aquí cerca</h3>
+      <p class="small mut" style="margin:4px 0 10px">¿Estás en alguna de estas? Si es la tienda de al lado, elige "Es otra tienda".</p>
+      <div id="f-cerca-lista"></div>
+      <button class="btn prim grande" id="f-es-otra" type="button">Es otra tienda → registrar nueva</button>
+    </section>
+
+    <section class="card hidden" id="f-rev-info"></section>
+
+    <form id="f-ficha" class="hidden" novalidate>
+      <div class="card">
+        <label class="f" style="margin-top:0">Foto de la fachada *</label>
+        <label class="foto-box" id="f-foto-box">
+          <input type="file" id="f-foto" accept="image/*" capture="environment" hidden>
+          <span style="font-size:34px">📷</span><span>Toca para tomar la foto</span>
+        </label>
+
+        <div class="solo-nueva">
+          <label class="f" for="f-canal">Tipo de punto *</label>
+          <select id="f-canal"></select>
+          <label class="f" for="f-negocio">Nombre del negocio *</label>
+          <input id="f-negocio" placeholder="Ej.: Bodega Don Lucho" autocomplete="off">
+          <label class="f" for="f-direccion">Dirección *</label>
+          <input id="f-direccion" placeholder="Ej.: Av. Arequipa 2450" autocomplete="off">
+          <div id="f-dir-nota" class="small mut hidden" style="margin-top:5px"></div>
+          <label class="f" for="f-distrito">Distrito *</label>
+          <select id="f-distrito"></select>
+          <label class="f" for="f-tipovia">¿Está en calle o avenida? *</label>
+          <select id="f-tipovia"></select>
+          <label class="f" for="f-contacto">Nombre del contacto <span class="opc">(opcional)</span></label>
+          <input id="f-contacto" placeholder="Con quién hablaste" autocomplete="off">
+          <label class="f" for="f-cargo">¿Quién es? <span class="opc">(opcional)</span></label>
+          <select id="f-cargo"></select>
+          <label class="f" for="f-telefono">Teléfono <span class="opc">(opcional)</span></label>
+          <input id="f-telefono" type="tel" inputmode="tel" placeholder="9XX XXX XXX">
+        </div>
+
+        <label class="f" for="f-congeladora">Congeladora ofrecida *</label>
+        <select id="f-congeladora"></select>
+
+        <label class="f">Resultado *</label>
+        <div class="resultados" id="f-resultados"></div>
+
+        <div id="f-motivo-wrap" class="hidden">
+          <label class="f" for="f-motivo">¿Por qué no se cerró? *</label>
+          <select id="f-motivo"></select>
+        </div>
+
+        <label class="f" for="f-obs">Observaciones <span class="opc">(opcional)</span></label>
+        <textarea id="f-obs" rows="2" placeholder="Ej.: volver el sábado, habla con la mamá"></textarea>
+      </div>
+      <div id="f-error" class="aviso rojo hidden"></div>
+      <button class="btn prim grande" id="f-guardar" type="submit">Guardar visita</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ SUPERVISOR ============ -->
+<div id="sup" class="hidden">
+  <div class="top">
+    <div class="tit"><b class="js-nombre-app"></b><span id="s-nombre"></span></div>
+    <span class="small" id="s-act" style="opacity:.85"></span>
+    <button class="btn-ico" id="s-refrescar" title="Actualizar">↻</button>
+    <button class="btn-ico hidden" id="s-admin" style="font-size:14px;font-weight:600">Usuarios</button>
+    <button class="btn-ico" id="s-salir" title="Cuenta" style="font-size:14px;font-weight:600">Cuenta</button>
+  </div>
+  <div class="demo-banner js-demo hidden">Modo demo: datos de ejemplo. Prueba registrar visitas entrando como vendedor y vuelve aquí.</div>
+  <div class="sup-wrap">
+    <div class="filtros">
+      <button class="btn sec" data-rango="hoy">Hoy</button>
+      <button class="btn sec" data-rango="ayer">Ayer</button>
+      <button class="btn sec" data-rango="7">Últimos 7 días</button>
+      <button class="btn sec" data-rango="mes">Este mes</button>
+      <span class="small mut" style="margin-left:6px">Desde</span><input type="date" id="s-desde">
+      <span class="small mut">Hasta</span><input type="date" id="s-hasta">
+      <select id="s-f-canal" style="width:auto;padding:8px 10px"></select>
+      <select id="s-f-distrito" style="width:auto;padding:8px 10px"></select>
+      <span style="flex:1"></span>
+      <button class="btn sec" id="s-csv">⬇ Exportar CSV</button>
+    </div>
+    <div class="tabs" id="s-tabs"></div>
+
+    <div id="s-vista-principal">
+      <div id="s-sin-equipo" class="aviso amar hidden" style="margin-bottom:12px">Aún no tienes vendedores asignados. Pídele al administrador que te asigne tu equipo.</div>
+      <div id="s-actividad" class="card hidden" style="margin-bottom:12px"></div>
+      <div class="kpis5">
+        <div class="kpi k-vis"><b id="s-k-vis">0</b><span>Visitados</span><small>tiendas nuevas</small></div>
+        <div class="kpi k-pro"><b id="s-k-pro">0</b><span>Prospectos</span><small>les interesó</small></div>
+        <div class="kpi k-cie"><b id="s-k-cie">0</b><span>Cierres</span><small>en la fecha del cierre</small></div>
+        <div class="kpi k-air"><b id="s-k-air">0</b><span>Prospectos abiertos</span><small>aún sin cerrar</small></div>
+        <div class="kpi"><b id="s-k-conv">0%</b><span>% de cierre</span><small>cierres / visitados</small></div>
+      </div>
+      <div class="sup-grid" style="margin-top:12px">
+        <div class="card">
+          <div class="mapa-ctrl">
+            <label><input type="checkbox" id="s-ruta" checked> Mostrar ruta</label>
+            <span style="flex:1"></span>
+            <div class="leyenda">
+              <span><i class="dot" style="background:var(--vis)"></i>Solo visita</span>
+              <span><i class="dot" style="background:var(--pro)"></i>Prospecto</span>
+              <span><i class="dot" style="background:var(--cie)"></i>Cierre</span>
+              <span><i class="dot" style="background:#fff;outline:2px solid #4338ca"></i>Revisita</span>
+            </div>
+          </div>
+          <div class="dias hidden" id="s-dias" style="margin-bottom:8px"></div>
+          <div id="s-ruta-titulo" class="small" style="font-weight:600;margin-bottom:6px"></div>
+          <div id="s-mapa" class="mapa"></div>
+        </div>
+        <div class="card panel-lista">
+          <div id="s-rank-wrap"></div>
+          <h3 style="margin:4px 0 8px" id="s-lista-tit">Visitas</h3>
+          <div id="s-lista" class="lista"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="s-vista-dup" class="hidden">
+      <div class="aviso azul" style="margin-bottom:10px">Estas tiendas están a menos de <span class="js-rdup"></span> m entre sí y tienen nombres parecidos. Compara las fotos: si son la misma tienda, anula la registrada después (deja de contar). Si son tiendas vecinas distintas, márcalas como distintas y el aviso desaparece.</div>
+      <div id="s-dup-lista" class="lista" style="gap:14px"></div>
+    </div>
+  </div>
+</div>
+
+<div id="modal" class="modal hidden"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   UTILIDADES
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const isoDia = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const isoLocal = d => `${isoDia(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+const hoyISO = () => isoDia(new Date());
+const sumarDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoDia(d); };
+const fechaLarga = iso => new Date(iso + 'T12:00:00').toLocaleDateString('es-PE', {weekday: 'long', day: 'numeric', month: 'long'});
+const fechaCorta = iso => new Date(iso + 'T12:00:00').toLocaleDateString('es-PE', {weekday: 'short', day: 'numeric', month: 'short'});
+const horaDe = fh => String(fh || '').slice(11, 16);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const uid = () => 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+function distM(a, b) {
+  const R = 6371000, rad = x => x * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+const PALABRAS_COMUNES = new Set(['bodega','minimarket','minimercado','market','tienda','abarrotes','comercial','multiservicios','la','el','los','las','de','del','don','dona','sr','sra','d','y','e','mi']);
+function normNombre(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w && !PALABRAS_COMUNES.has(w)).join(' ');
+}
+function levenshtein(a, b) {
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prev = Array.from({length: n + 1}, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function similitudNombres(x, y) {
+  const a = normNombre(x), b = normNombre(y);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.includes(b) || b.includes(a)) return 0.9;
+  const ta = new Set(a.split(' ')), tb = new Set(b.split(' '));
+  const inter = [...ta].filter(t => tb.has(t)).length;
+  const jac = inter / new Set([...ta, ...tb]).size;
+  const lev = 1 - levenshtein(a, b) / Math.max(a.length, b.length);
+  return Math.max(jac, lev);
+}
+
+let toastTimer;
+function toast(msg, err = false) {
+  let t = $('.toast'); if (!t) { t = document.createElement('div'); document.body.appendChild(t); }
+  t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', err ? 5000 : 2800);
+}
+
+// Listas desplegables vigentes (las define el administrador; si no, las de CONFIG)
+const Listas = {
+  canales: [...CONFIG.CANALES], distritos: [...CONFIG.DISTRITOS], congeladoras: [...CONFIG.CONGELADORAS], motivos: [...CONFIG.MOTIVOS],
+  aplicar(l, guardar = true) {
+    if (!l) return;
+    for (const k of ['canales', 'distritos', 'congeladoras', 'motivos']) if (Array.isArray(l[k]) && l[k].length) this[k] = l[k];
+    if (guardar) try { localStorage.setItem('rc_listas', JSON.stringify({canales: this.canales, distritos: this.distritos, congeladoras: this.congeladoras, motivos: this.motivos})); } catch {}
+    poblarSelects();
+  },
+  cargar() { try { this.aplicar(JSON.parse(localStorage.getItem('rc_listas')), false); } catch {} }
+};
+const normTxt = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+function buscarDistrito(nombre) {
+  const n = normTxt(nombre).replace(/^distrito de /, '');
+  if (!n) return '';
+  const alias = {lima: 'cercado de lima', 'cercado': 'cercado de lima', surco: 'santiago de surco', magdalena: 'magdalena del mar', chosica: 'lurigancho-chosica'};
+  const obj = alias[n] || n;
+  return Listas.distritos.find(d => normTxt(d) === obj) || Listas.distritos.find(d => normTxt(d).length > 4 && (normTxt(d).includes(obj) || obj.includes(normTxt(d)))) || '';
+}
+function poblarSelects() {
+  const opts = (sel, arr, ph) => {
+    const el = $(sel); if (!el) return; const v = el.value;
+    el.innerHTML = `<option value="">${ph}</option>` + arr.map(x => `<option>${esc(x)}</option>`).join('');
+    if (arr.includes(v)) el.value = v;
+  };
+  opts('#f-tipovia', CONFIG.TIPOS_VIA, 'Elegir…'); opts('#f-cargo', CONFIG.CARGOS, 'Sin especificar');
+  opts('#f-congeladora', Listas.congeladoras, 'Elegir…'); opts('#f-motivo', Listas.motivos, 'Elegir…');
+  const pf = (typeof Vendedor !== 'undefined' && Vendedor.perfil) || {};
+  const canales = (pf.canales || []).length ? pf.canales : Listas.canales;
+  opts('#f-canal', canales, canales.length > 1 ? 'Elegir…' : 'Elegir…');
+  // distritos: primero los asignados al vendedor
+  const el = $('#f-distrito');
+  if (el) {
+    const v = el.value, mios = (pf.distritos || []).filter(Boolean), otros = Listas.distritos.filter(d => !mios.includes(d));
+    const o = arr => arr.map(x => `<option>${esc(x)}</option>`).join('');
+    el.innerHTML = '<option value="">Elegir…</option>' + (mios.length ? `<optgroup label="Tus distritos">${o(mios)}</optgroup><optgroup label="Otros distritos">${o(otros)}</optgroup>` : o(Listas.distritos));
+    if ([...mios, ...otros].includes(v)) el.value = v;
+  }
+  opts('#s-f-canal', Listas.canales, 'Todos los tipos de punto'); opts('#s-f-distrito', Listas.distritos, 'Todos los distritos');
+}
+function actividad(iso) {
+  if (!iso) return {t: 'Sin actividad aún', c: '#94a3b8'};
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  const c = min <= 30 ? '#16a34a' : min <= 120 ? '#d97706' : '#94a3b8';
+  const t = min < 1 ? 'activo ahora' : min < 60 ? `hace ${min} min` : min < 24 * 60 ? `hace ${Math.floor(min / 60)} h ${min % 60} min` : `el ${fechaCorta(iso.slice(0, 10))} ${horaDe(iso)}`;
+  return {t, c, hora: (iso.slice(0, 10) === hoyISO() ? 'hoy ' : fechaCorta(iso.slice(0, 10)) + ' ') + horaDe(iso)};
+}
+const actvHtml = iso => { const a = actividad(iso); return `<span class="actv" title="${esc(a.hora || '')}"><i class="dot" style="background:${a.c}"></i>${esc(a.t)}</span>`; };
+function validarPinNuevo(p, anterior) {
+  if (!/^\d{6}$/.test(p)) return 'El PIN debe tener exactamente 6 números';
+  if (/^(\d)\1{5}$/.test(p) || ['123456', '654321', '012345', '123123', '112233'].includes(p)) return 'Ese PIN es muy fácil de adivinar. Elige otro.';
+  if (p === anterior) return 'El PIN nuevo debe ser distinto al anterior';
+  return null;
+}
+function manejarAuth(e) {
+  if (!e || !e.auth) return false;
+  if (e.auth === 'cambiarPin') { PinScreen.abrir(true); return true; }
+  toast(e.message, true); salir(); return true;
+}
+
+const RES = {
+  visita:    {t: 'Solo visita', d: 'No le interesó', c: '#64748b'},
+  prospecto: {t: 'Prospecto',   d: 'Le interesó, pero no cerró', c: '#d97706'},
+  cierre:    {t: 'Cierre',      d: 'Aceptó', c: '#16a34a'}
+};
+const COLORES_VENDEDOR = ['#2563eb', '#9333ea', '#0891b2', '#db2777', '#4d7c0f', '#ea580c', '#0f766e', '#7c3aed'];
+
+function chipRes(v) {
+  const t = v.tipo === 'revisita' ? {prospecto: 'Sigue como prospecto', visita: 'Ya no le interesa', cierre: 'Cierre'}[v.resultado] : RES[v.resultado]?.t;
+  return `<span class="chip ${v.resultado}">${esc(t)}</span>`;
+}
+function imgFoto(url, cls = '') {
+  return url ? `<img src="${esc(url)}" class="${cls}" loading="lazy" alt="">` : `<div class="noimg ${cls}"></div>`;
+}
+function normalizarVisita(v) {
+  return {...v, lat: +v.lat, lng: +v.lng, precision: +v.precision || 0,
+    fecha: String(v.fecha).slice(0, 10), fechaHora: String(v.fechaHora).slice(0, 19)};
+}
+
+/* =====================================================================
+   LÓGICA DE NEGOCIO (la misma regla vive en Code.gs)
+   - Cada tienda ("punto") nace con una visita tipo "nueva".
+   - Solo se puede revisitar una tienda en estado "prospecto", y solo para cerrar
+     (resultado: cierre, sigue como prospecto, o ya no le interesa).
+   - Visitados = tiendas nuevas. Prospectos = tiendas nuevas a las que les interesó.
+     Cierres = visitas con resultado cierre (cuentan en la fecha del cierre).
+     Prospectos abiertos = tiendas registradas en el periodo que siguen como prospecto.
+   ===================================================================== */
+function construirPuntos(visitas, revisiones) {
+  const anulados = new Set((revisiones || []).filter(r => r.decision === 'duplicado').map(r => r.idB));
+  const orden = [...visitas].sort((a, b) => a.fechaHora.localeCompare(b.fechaHora));
+  const puntos = new Map();
+  for (const v of orden) if (v.tipo === 'nueva')
+    puntos.set(v.id, {id: v.id, base: v, visitas: [v], ultima: v, estado: v.resultado, anulado: anulados.has(v.id)});
+  for (const v of orden) if (v.tipo === 'revisita') {
+    const p = puntos.get(v.puntoId);
+    if (p) { p.visitas.push(v); p.ultima = v; p.estado = v.resultado; }
+  }
+  return puntos;
+}
+
+function calcularKpis(puntos, {desde, hasta, usuario, dia, filtro}) {
+  const enRango = f => dia ? f === dia : (f >= desde && f <= hasta);
+  const k = {visitados: 0, prospectos: 0, cierres: 0, enAire: 0, revisitas: 0};
+  for (const p of puntos.values()) {
+    if (p.anulado || (filtro && !filtro(p.base))) continue;
+    for (const v of p.visitas) {
+      if (usuario && v.usuario !== usuario) continue;
+      if (!enRango(v.fecha)) continue;
+      if (v.tipo === 'nueva') { k.visitados++; if (v.resultado !== 'visita') k.prospectos++; }
+      else k.revisitas++;
+      if (v.resultado === 'cierre') k.cierres++;
+    }
+    if ((!usuario || p.base.usuario === usuario) && enRango(p.base.fecha) && p.estado === 'prospecto') k.enAire++;
+  }
+  k.conv = k.visitados ? Math.round(k.cierres / k.visitados * 100) : 0;
+  return k;
+}
+
+function paresDuplicados(puntos, revisiones) {
+  const revisados = new Set((revisiones || []).map(r => [r.idA, r.idB].sort().join('|')));
+  const lista = [...puntos.values()].filter(p => !p.anulado).sort((a, b) => a.base.fechaHora.localeCompare(b.base.fechaHora));
+  const pares = [];
+  for (let i = 0; i < lista.length; i++) for (let j = i + 1; j < lista.length; j++) {
+    const a = lista[i].base, b = lista[j].base;
+    if (Math.abs(a.lat - b.lat) > 0.001 || Math.abs(a.lng - b.lng) > 0.001) continue;
+    const d = distM(a, b);
+    if (d > CONFIG.RADIO_DUPLICADO_M) continue;
+    const sim = similitudNombres(a.negocio, b.negocio);
+    if (sim < 0.6) continue;
+    if (revisados.has([a.id, b.id].sort().join('|'))) continue;
+    pares.push({a: lista[i], b: lista[j], d: Math.round(d), sim});
+  }
+  return pares;
+}
+
+// Valida una visita contra los puntos existentes (lo mismo hace el servidor)
+function validarVisita(v, puntos) {
+  if (!['nueva', 'revisita'].includes(v.tipo)) return 'Tipo de visita inválido';
+  if (!RES[v.resultado]) return 'Resultado inválido';
+  if (!isFinite(v.lat) || !isFinite(v.lng)) return 'Falta la ubicación GPS';
+  if (v.tipo === 'revisita') {
+    const p = puntos.get(v.puntoId);
+    if (!p || p.anulado) return 'La tienda a revisitar no existe';
+    if (p.estado !== 'prospecto') return `No se puede revisitar "${p.base.negocio}": ya está como ${RES[p.estado].t.toLowerCase()}. Solo se revisitan prospectos para cerrar.`;
+  }
+  return null;
+}
+
+/* =====================================================================
+   SESIÓN
+   ===================================================================== */
+const Sesion = {
+  s: null,
+  cargar() { try { this.s = JSON.parse(localStorage.getItem('rc_sesion')); } catch { this.s = null; } return this.s; },
+  guardar(s) { this.s = s; localStorage.setItem('rc_sesion', JSON.stringify(s)); },
+  cerrar() { this.s = null; localStorage.removeItem('rc_sesion'); }
+};
+
+/* =====================================================================
+   API (Apps Script o demo)
+   ===================================================================== */
+const App = {simOffline: false};
+class SinSenal extends Error {}
+const API = {
+  get demo() { return !CONFIG.API_URL; },
+  async call(accion, datos = {}) {
+    if (App.simOffline || navigator.onLine === false) throw new SinSenal('Sin señal');
+    if (this.demo) return Demo.call(accion, datos);
+    const s = Sesion.s || {};
+    let res;
+    try {
+      res = await fetch(CONFIG.API_URL, {
+        method: 'POST', headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({accion, usuario: s.usuario, pin: s.pin, ...datos})
+      });
+    } catch (e) { throw new SinSenal('Sin conexión con el servidor'); }
+    if (!res.ok) throw new SinSenal('Servidor no disponible (' + res.status + ')');
+    const j = await res.json();
+    if (!j.ok) { const e = new Error(j.error || 'Error del servidor'); e.servidor = true; e.auth = j.auth; throw e; }
+    return j.data;
+  }
+};
+
+/* =====================================================================
+   COLA OFFLINE (IndexedDB): las visitas se guardan aquí primero y se suben
+   cuando hay señal.
+   ===================================================================== */
+const Cola = {
+  db: null,
+  abrir() {
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((ok, ko) => {
+      const r = indexedDB.open('rutaDeCampo', 1);
+      r.onupgradeneeded = () => {
+        r.result.createObjectStore('cola', {keyPath: 'id'});
+        r.result.createObjectStore('rechazadas', {keyPath: 'id'});
+      };
+      r.onsuccess = () => { this.db = r.result; ok(this.db); };
+      r.onerror = () => ko(r.error);
+    });
+  },
+  async op(store, modo, fn) {
+    const db = await this.abrir();
+    return new Promise((ok, ko) => {
+      const tx = db.transaction(store, modo); const req = fn(tx.objectStore(store));
+      tx.oncomplete = () => ok(req && req.result); tx.onerror = () => ko(tx.error);
+    });
+  },
+  poner(item, store = 'cola') { return this.op(store, 'readwrite', s => s.put(item)); },
+  quitar(id, store = 'cola') { return this.op(store, 'readwrite', s => s.delete(id)); },
+  async todos(store = 'cola') {
+    const u = Sesion.s?.usuario;
+    return (await this.op(store, 'readonly', s => s.getAll())).filter(i => i.visita.usuario === u)
+      .sort((a, b) => a.visita.fechaHora.localeCompare(b.visita.fechaHora));
+  }
+};
+
+let sincronizando = false;
+async function sincronizar() {
+  if (sincronizando || Sesion.s?.rol !== 'vendedor') return;
+  sincronizando = true;
+  let subidas = 0, rechazadas = 0;
+  try {
+    for (const it of await Cola.todos()) {
+      try {
+        await API.call('guardarVisita', {visita: it.visita, foto: it.foto});
+        await Cola.quitar(it.id); subidas++;
+      } catch (e) {
+        if (e.auth) { sincronizando = false; manejarAuth(e); return; }
+        if (e.servidor) {
+          await Cola.poner({id: it.id, visita: it.visita, error: e.message}, 'rechazadas');
+          await Cola.quitar(it.id); rechazadas++;
+        } else break; // sin señal: se reintenta luego
+      }
+    }
+  } finally { sincronizando = false; }
+  if (subidas) toast(`✓ ${subidas} visita${subidas > 1 ? 's' : ''} subida${subidas > 1 ? 's' : ''}`);
+  if (rechazadas) toast('Una visita fue rechazada por el servidor. Revisa el aviso.', true);
+  await Vendedor.refrescar();
+}
+window.addEventListener('online', () => sincronizar());
+setInterval(() => sincronizar(), 30000);
+
+/* =====================================================================
+   FOTOS
+   ===================================================================== */
+function comprimirFoto(file, max, calidad) {
+  return new Promise((ok, ko) => {
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', calidad));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('No se pudo leer la foto')); };
+    img.src = url;
+  });
+}
+
+/* =====================================================================
+   MAPAS (Leaflet + OpenStreetMap, gratis)
+   ===================================================================== */
+const Mapas = {
+  ok: () => typeof L !== 'undefined',
+  crear(el, opts = {}) {
+    if (!this.ok()) { el.innerHTML = '<div class="mapa-error">No se pudo cargar el mapa (revisa tu conexión).</div>'; return null; }
+    const m = L.map(el, {zoomControl: opts.zoom !== false, attributionControl: true, ...opts.leaflet}).setView(CONFIG.CENTRO_MAPA, 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '© OpenStreetMap'}).addTo(m);
+    return m;
+  },
+  icono(n, color, revisita) {
+    return L.divIcon({className: 'mk', iconSize: [26, 26], iconAnchor: [13, 13],
+      html: `<div class="pin${revisita ? ' rev' : ''}" style="background:${color}">${n}</div>`});
+  },
+  // dibuja visitas agrupadas por vendedor+día, numeradas por hora, con su ruta
+  dibujar(mapa, capa, visitas, {ruta = true, colorVendedor = () => '#334155', onClick} = {}) {
+    capa.clearLayers();
+    const grupos = {};
+    for (const v of visitas) (grupos[v.usuario + '|' + v.fecha] ||= []).push(v);
+    const puntos = [];
+    for (const g of Object.values(grupos)) {
+      g.sort((a, b) => a.fechaHora.localeCompare(b.fechaHora));
+      if (ruta && g.length > 1)
+        L.polyline(g.map(v => [v.lat, v.lng]), {color: colorVendedor(g[0].usuario), weight: 3, opacity: .75, dashArray: '6 6'}).addTo(capa);
+      g.forEach((v, i) => {
+        const mk = L.marker([v.lat, v.lng], {icon: this.icono(i + 1, RES[v.resultado].c, v.tipo === 'revisita'), title: v.negocio}).addTo(capa);
+        if (onClick) mk.on('click', () => onClick(v));
+        puntos.push([v.lat, v.lng]);
+      });
+    }
+    return puntos;
+  },
+  encuadrar(mapa, puntos) {
+    if (!mapa) return;
+    if (puntos.length) mapa.fitBounds(L.latLngBounds(puntos), {padding: [30, 30], maxZoom: 17});
+    else mapa.setView(CONFIG.CENTRO_MAPA, 14);
+  }
+};
+
+/* =====================================================================
+   VISTA VENDEDOR
+   ===================================================================== */
+const Vendedor = {
+  datos: {puntos: [], mias: []}, perfil: {}, pend: [], mapa: null, capa: null, tab: 'hoy',
+  claveCache() { return 'rc_cache_' + Sesion.s.usuario; },
+  async iniciar() {
+    $('#v-nombre').textContent = Sesion.s.nombre;
+    $('#v-fecha').textContent = fechaLarga(hoyISO());
+    try { this.datos = JSON.parse(localStorage.getItem(this.claveCache())) || this.datos; this.perfil = this.datos.perfil || {}; } catch {}
+    poblarSelects();
+    if (!this.mapa) { this.mapa = Mapas.crear($('#v-mapa')); if (this.mapa) this.capa = L.layerGroup().addTo(this.mapa); }
+    await this.render();
+    setTimeout(() => this.mapa && this.mapa.invalidateSize(), 100);
+    sincronizar();
+  },
+  async refrescar() {
+    if (Sesion.s?.rol !== 'vendedor') return;
+    try {
+      const d = await API.call('vendedorDatos');
+      this.perfil = d.perfil || {};
+      this.datos = {puntos: d.puntos.map(normalizarVisita), mias: d.mias.map(normalizarVisita), perfil: this.perfil};
+      localStorage.setItem(this.claveCache(), JSON.stringify(this.datos));
+      Listas.aplicar(d.listas);
+    } catch (e) { if (manejarAuth(e)) return; /* sin señal: se usa lo guardado */ }
+    await this.render();
+  },
+  // puntos (todas las tiendas, versión ligera) + lo que está pendiente de subir
+  puntosLocales() {
+    const mapa = new Map(this.datos.puntos.map(p => [p.id, {...p}]));
+    for (const it of this.pend) {
+      const v = it.visita;
+      if (v.tipo === 'nueva') mapa.set(v.id, {id: v.id, negocio: v.negocio, direccion: v.direccion, tipoPunto: v.tipoPunto, distrito: v.distrito, lat: v.lat, lng: v.lng,
+        tipoVia: v.tipoVia, contacto: v.contacto, cargo: v.cargo, telefono: v.telefono, congeladora: v.congeladora,
+        estado: v.resultado, fotoUrl: it.foto || v.fotoUrl, usuario: v.usuario, vendedor: v.vendedor, fecha: v.fecha, fechaHora: v.fechaHora, pendiente: true});
+      else if (mapa.has(v.puntoId)) mapa.get(v.puntoId).estado = v.resultado;
+    }
+    return [...mapa.values()];
+  },
+  misVisitas() {
+    const ids = new Set(this.datos.mias.map(v => v.id));
+    return [...this.datos.mias, ...this.pend.filter(it => !ids.has(it.id)).map(it => ({...it.visita, fotoUrl: it.foto || it.visita.fotoUrl, pendiente: true}))];
+  },
+  async render() {
+    if (Sesion.s?.rol !== 'vendedor') return;
+    this.pend = await Cola.todos();
+    const rech = await Cola.todos('rechazadas');
+    const hoy = hoyISO();
+    const deHoy = this.misVisitas().filter(v => v.fecha === hoy).sort((a, b) => a.fechaHora.localeCompare(b.fechaHora));
+    $('#v-k-vis').textContent = deHoy.filter(v => v.tipo === 'nueva').length;
+    $('#v-k-vis').nextElementSibling.textContent = +this.perfil.metaDiaria ? `Visitados · meta ${this.perfil.metaDiaria}` : 'Visitados hoy';
+    $('#v-k-pro').textContent = deHoy.filter(v => v.tipo === 'nueva' && v.resultado !== 'visita').length;
+    $('#v-k-cie').textContent = deHoy.filter(v => v.resultado === 'cierre').length;
+
+    const sb = $('#v-sync');
+    if (this.pend.length) { sb.className = 'syncbar pend'; sb.textContent = `⏳ ${this.pend.length} visita${this.pend.length > 1 ? 's' : ''} pendiente${this.pend.length > 1 ? 's' : ''} de subir — se subirán solas cuando haya señal`; }
+    else { sb.className = 'syncbar'; sb.textContent = '✓ Todo subido'; }
+
+    // rechazadas
+    const rw = $('#v-rechazadas');
+    rw.classList.toggle('hidden', !rech.length);
+    rw.innerHTML = rech.map(r => `<div class="aviso rojo" style="margin-bottom:8px"><b>No se subió: ${esc(r.visita.negocio)}</b> (${horaDe(r.visita.fechaHora)})<br>${esc(r.error)}
+      <div style="margin-top:6px"><button class="btn sec" data-desc="${esc(r.id)}" style="padding:6px 10px;font-size:13px">Entendido, descartar</button></div></div>`).join('');
+
+    // lista y mapa de hoy
+    $('#v-lista-hoy').innerHTML = deHoy.length ? deHoy.map((v, i) => `
+      <div class="item">
+        <div class="num" style="background:${RES[v.resultado].c}">${i + 1}</div>
+        ${imgFoto(v.fotoUrl)}
+        <div class="tx"><b>${esc(v.negocio)}</b><small>${horaDe(v.fechaHora)} · ${esc(v.direccion)}</small>
+          <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${chipRes(v)}${v.tipo === 'revisita' ? '<span class="chip rev">Revisita</span>' : ''}${v.pendiente ? '<span class="chip pend">Pendiente de subir</span>' : ''}</div></div>
+      </div>`).join('') : '<div class="vacio">Aún no registras visitas hoy.<br>Toca <b>＋ Registrar visita</b> en cada tienda.</div>';
+    if (this.mapa) Mapas.encuadrar(this.mapa, Mapas.dibujar(this.mapa, this.capa, deHoy, {colorVendedor: () => CONFIG.COLOR}));
+
+    // prospectos e historial
+    const pros = this.misTiendas().filter(p => p.estado === 'prospecto');
+    $('#v-n-pros').textContent = pros.length ? `(${pros.length})` : '';
+    this.pintarUbic();
+    if (this.tab === 'hist') this.renderTiendas('hist');
+  },
+
+  // ---------- Mis prospectos / Mis tiendas ----------
+  miPos: null, buscandoPos: false, filtroHist: 'prospecto', mapas: {}, capas: {},
+  // tiendas registradas por mí o donde hice alguna visita, con su estado actual y su historial
+  misTiendas() {
+    const yo = Sesion.s.usuario, mias = this.misVisitas();
+    const porPunto = {};
+    for (const v of mias) (porPunto[v.tipo === 'nueva' ? v.id : v.puntoId] ||= []).push(v);
+    return this.puntosLocales().filter(p => p.usuario === yo || porPunto[p.id]).map(p => {
+      const vs = (porPunto[p.id] || []).sort((a, b) => a.fechaHora.localeCompare(b.fechaHora));
+      const ult = vs[vs.length - 1];
+      return {...p, nVisitas: Math.max(vs.length, 1), ultima: ult ? ult.fechaHora : (p.fechaHora || p.fecha + 'T00:00:00'),
+        d: this.miPos ? Math.round(distM(this.miPos, p)) : null};
+    });
+  },
+  ordenar(lista) {
+    return this.miPos ? lista.sort((a, b) => a.d - b.d) : lista.sort((a, b) => b.ultima.localeCompare(a.ultima));
+  },
+  pintarUbic() {
+    const p = this.miPos;
+    let html;
+    if (this.buscandoPos) html = '📡 Buscando tu ubicación…';
+    else if (p) html = `📍 Ordenadas por cercanía a tu ubicación (±${p.acc} m, ${horaDe(isoLocal(new Date(p.t)))}) <button class="btn sec" data-ubic="1">↻ Actualizar</button>`;
+    else html = `Activa el GPS para ordenarlas de la más cercana a la más lejana. <button class="btn sec" data-ubic="1">📍 Usar mi ubicación</button>`;
+    if (API.demo && !this.buscandoPos) html += ' <button class="btn sec" data-ubic-sim="1">Simular ubicación (demo)</button>';
+    $$('.js-ubic').forEach(e => e.innerHTML = html);
+  },
+  ubicar(forzar = false) {
+    if (this.buscandoPos || !navigator.geolocation) return;
+    if (!forzar && this.miPos && Date.now() - this.miPos.t < 120000) return;
+    this.buscandoPos = true; this.pintarUbic();
+    this.simulada = false;
+    navigator.geolocation.getCurrentPosition(pos => {
+      if (this.simulada) return; // el vendedor eligió simular mientras se buscaba
+      this.buscandoPos = false;
+      this.miPos = {lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy), t: Date.now()};
+      this.render();
+    }, () => {
+      if (this.simulada) return;
+      this.buscandoPos = false; this.pintarUbic();
+      if (forzar) toast('No se pudo obtener tu ubicación. Revisa que el GPS esté activo.', true);
+    }, {enableHighAccuracy: true, timeout: 12000, maximumAge: 60000});
+  },
+  simularUbic() {
+    const ps = this.misTiendas();
+    const base = ps.length ? ps[Math.floor(Math.random() * ps.length)] : {lat: CONFIG.CENTRO_MAPA[0], lng: CONFIG.CENTRO_MAPA[1]};
+    this.buscandoPos = false; this.simulada = true;
+    this.miPos = {lat: base.lat + 0.0015, lng: base.lng + 0.0008, acc: 10, t: Date.now()};
+    this.render();
+  },
+  renderTiendas(cual) {
+    let lista = this.misTiendas();
+    const todas = lista;
+    const n = e => todas.filter(p => p.estado === e).length;
+    $$('#v-hist-filtro [data-hf]').forEach(b => { const e = b.dataset.hf; b.textContent = {prospecto: 'Prospectos', cierre: 'Cerradas', visita: 'Sin interés', '': 'Todas'}[e] + ` (${e ? n(e) : todas.length})`; });
+    $('#v-hist-ayuda').innerHTML = this.filtroHist === 'prospecto'
+      ? 'Tiendas a las que les interesó y aún no cierran, de la más cercana a la más lejana. Cuando estés en la tienda, toca <b>Cerrar venta</b> o <b>Ya no le interesa</b>.'
+      : 'Tiendas que has visitado y en qué quedó cada una.';
+    if (cual === 'pros') lista = lista.filter(p => p.estado === 'prospecto');
+    else {
+      if (this.filtroHist) lista = lista.filter(p => p.estado === this.filtroHist);
+      const q = normTxt($('#v-hist-buscar').value);
+      if (q) lista = lista.filter(p => normTxt(p.negocio + ' ' + p.direccion + ' ' + (p.distrito || '')).includes(q));
+    }
+    this.ordenar(lista);
+    const dist = d => d == null ? '' : d < 1000 ? `a ${d} m` : `a ${(d / 1000).toFixed(1)} km`;
+    const etiqueta = {prospecto: 'Prospecto', cierre: 'Cerrada', visita: 'Sin interés'};
+    const cont = $(cual === 'pros' ? '#v-lista-pros' : '#v-lista-hist');
+    cont.innerHTML = lista.length ? lista.map((p, i) => `
+      <div class="item" data-foco="${esc(p.id)}" data-cual="${cual}">
+        <div class="num" style="background:${RES[p.estado].c}">${i + 1}</div>
+        ${imgFoto(p.fotoUrl)}
+        <div class="tx"><b>${esc(p.negocio)}</b>
+          <small>${esc(p.direccion)}${p.distrito ? ' · ' + esc(p.distrito) : ''}</small>
+          <small>${p.d != null ? '<strong style="color:var(--tx)">' + dist(p.d) + '</strong> · ' : ''}Última visita ${esc(fechaCorta(p.ultima.slice(0, 10)))}${p.nVisitas > 1 ? ` · ${p.nVisitas} visitas` : ''}</small>
+          <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap"><span class="chip ${p.estado}">${etiqueta[p.estado]}</span>${p.tipoPunto ? `<span class="chip visita">${esc(p.tipoPunto)}</span>` : ''}${p.pendiente ? '<span class="chip pend">Pendiente de subir</span>' : ''}</div>
+          <div class="acc-v">
+            ${p.estado === 'prospecto' ? `<button class="btn prim" data-rapido="${esc(p.id)}" data-res="cierre" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>✓ Cerrar venta</button>
+              <button class="btn peligro" data-rapido="${esc(p.id)}" data-res="visita" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>✕ Ya no le interesa</button>` : ''}
+            <a class="btn sec" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}">Cómo llegar ↗</a>
+          </div></div>
+      </div>`).join('')
+      : `<div class="vacio">${cual === 'pros' ? 'No tienes prospectos pendientes. 🎉' : (this.filtroHist === 'prospecto' ? 'No tienes prospectos pendientes. 🎉' : 'No hay tiendas con ese filtro.')}</div>`;
+    // mapa
+    const elMapa = $(cual === 'pros' ? '#v-mapa-pros' : '#v-mapa-hist');
+    if (!this.mapas[cual]) { this.mapas[cual] = Mapas.crear(elMapa); if (this.mapas[cual]) this.capas[cual] = L.layerGroup().addTo(this.mapas[cual]); }
+    const m = this.mapas[cual]; if (!m) return;
+    m.invalidateSize();
+    const capa = this.capas[cual]; capa.clearLayers();
+    const pts = [];
+    lista.forEach((p, i) => {
+      L.marker([p.lat, p.lng], {icon: Mapas.icono(i + 1, RES[p.estado].c), title: p.negocio}).addTo(capa).on('click', () => this.enfocar(p.id, cual, false));
+      pts.push([p.lat, p.lng]);
+    });
+    if (this.miPos) {
+      L.circleMarker([this.miPos.lat, this.miPos.lng], {radius: 8, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1}).addTo(capa).bindTooltip('Tú estás aquí');
+      pts.push([this.miPos.lat, this.miPos.lng]);
+    }
+    Mapas.encuadrar(m, pts);
+  },
+  enfocar(id, cual, mover = true) {
+    const p = this.misTiendas().find(x => x.id === id); if (!p) return;
+    $$('#vt-' + cual + ' .item').forEach(e => e.classList.toggle('foco', e.dataset.foco === id));
+    if (mover && this.mapas[cual]) { this.mapas[cual].setView([p.lat, p.lng], 17); $('#v-mapa-' + cual).scrollIntoView({behavior: 'smooth', block: 'center'}); }
+    if (!mover) { const it = $(`#vt-${cual} .item[data-foco="${CSS.escape(id)}"]`); if (it) it.scrollIntoView({behavior: 'smooth', block: 'center'}); }
+  }
+};
+
+/* =====================================================================
+   FORMULARIO DE VISITA
+   ===================================================================== */
+const Form = {
+  modo: 'nueva', punto: null, gps: null, foto: null, watch: null, timer: null, mini: null, miniCapa: null,
+  abrir(modo = 'nueva', punto = null, resInicial = null) {
+    Object.assign(this, {modo, punto, gps: null, foto: null, dirAuto: null, resInicial});
+    $('#f-dir-nota').classList.add('hidden');
+    $('#f-titulo').textContent = modo === 'nueva' ? 'Nueva visita' : 'Actualizar prospecto';
+    $('#f-ficha').reset(); $('#f-ficha').classList.add('hidden');
+    $('#f-cerca').classList.add('hidden'); $('#f-error').classList.add('hidden');
+    $('#f-foto-box').innerHTML = '<input type="file" id="f-foto" accept="image/*" capture="environment" hidden><span style="font-size:34px">📷</span><span>Toca para tomar la foto</span>';
+    $('#f-foto').addEventListener('change', e => this.tomarFoto(e));
+    $$('.solo-nueva').forEach(el => el.classList.toggle('hidden', modo !== 'nueva'));
+    this.pintarResultados();
+    poblarSelects();
+    const canales = [...$('#f-canal').options].filter(o => o.value);
+    if (canales.length === 1) $('#f-canal').value = canales[0].value;
+    this.mostrarMotivo();
+    const ri = $('#f-rev-info');
+    ri.classList.toggle('hidden', modo !== 'revisita');
+    if (punto) ri.innerHTML = `<div style="display:flex;gap:10px;align-items:center">${imgFoto(punto.fotoUrl).replace('<img', '<img style="width:64px;height:64px;border-radius:8px;object-fit:cover"')}
+      <div><b>${esc(punto.negocio)}</b><div class="small mut">${esc(punto.direccion)}</div><div style="margin-top:4px"><span class="chip prospecto">Prospecto</span></div></div></div>`;
+    $('#form').classList.remove('hidden'); document.body.style.overflow = 'hidden';
+    this.capturarGPS();
+  },
+  cerrar() {
+    this.pararGPS();
+    $('#form').classList.add('hidden'); document.body.style.overflow = '';
+  },
+  pintarResultados() {
+    const ops = this.modo === 'nueva' ? ['visita', 'prospecto', 'cierre'] : ['cierre', 'visita', 'prospecto'];
+    const rev = {cierre: ['Pasar a cerrada', 'Aceptó: se cerró la venta'], visita: ['Ya no le interesa', 'Pasa a "sin interés"'], prospecto: ['Sigue como prospecto', 'Aún no decide']};
+    $('#f-resultados').innerHTML = ops.map(r => {
+      const t = this.modo === 'revisita' ? rev[r][0] : RES[r].t;
+      const d = this.modo === 'revisita' ? rev[r][1] : RES[r].d;
+      return `<label class="res-op ${r}"><input type="radio" name="resultado" value="${r}"><i class="dot" style="background:${RES[r].c};width:14px;height:14px"></i><div><b>${t}</b><small>${d}</small></div></label>`;
+    }).join('');
+    $$('#f-resultados input').forEach(i => i.addEventListener('change', () => {
+      $$('#f-resultados .res-op').forEach(l => l.classList.toggle('sel', l.querySelector('input').checked));
+      this.mostrarMotivo();
+    }));
+    if (this.resInicial) { const i = $(`#f-resultados input[value="${this.resInicial}"]`); if (i) { i.checked = true; i.dispatchEvent(new Event('change')); } }
+  },
+  pideMotivo(r) { return r === 'prospecto' || (this.modo === 'revisita' && r === 'visita'); },
+  mostrarMotivo() {
+    const r = $('#f-resultados input:checked')?.value;
+    $('#f-motivo-wrap').classList.toggle('hidden', !this.pideMotivo(r));
+    $('#f-motivo-wrap label').textContent = r === 'visita' ? '¿Por qué ya no le interesa? *' : '¿Por qué no se cerró? *';
+  },
+  estadoGPS(clase, ico, txt, sub) {
+    const g = $('#f-gps'); g.className = 'gps ' + clase;
+    g.querySelector('.ico').textContent = ico; $('#f-gps-txt').textContent = txt;
+    if (sub !== undefined) $('#f-gps-sub').textContent = sub;
+  },
+  pararGPS() {
+    if (this.watch != null) navigator.geolocation.clearWatch(this.watch);
+    clearTimeout(this.timer); this.watch = null;
+  },
+  capturarGPS() {
+    this.pararGPS(); this.gps = null;
+    $('#f-gps-retry').classList.add('hidden'); $('#f-minimapa').classList.add('hidden');
+    $('#f-ficha').classList.add('hidden'); $('#f-cerca').classList.add('hidden');
+    $$('.js-demo-gps').forEach(b => b.classList.toggle('hidden', !API.demo || (b.dataset.sim === 'cerca' && this.modo === 'revisita')));
+    this.estadoGPS('busca', '📡', 'Buscando tu ubicación…', 'La ubicación y la hora se registran automáticamente y no se pueden cambiar.');
+    if (!navigator.geolocation) return this.falloGPS('Este equipo no tiene GPS disponible.');
+    let mejor = null;
+    const terminar = () => {
+      this.pararGPS();
+      if (!mejor) return this.falloGPS('No se pudo obtener la ubicación. Activa el GPS y permite el acceso a la ubicación.');
+      this.recibirGPS(mejor);
+    };
+    this.watch = navigator.geolocation.watchPosition(p => {
+      const c = p.coords;
+      if (!mejor || c.accuracy < mejor.acc) mejor = {lat: c.latitude, lng: c.longitude, acc: Math.round(c.accuracy)};
+      this.estadoGPS('busca', '📡', `Afinando ubicación… ±${mejor.acc} m`);
+      if (mejor.acc <= 15) terminar();
+    }, err => {
+      if (err.code === 1) { this.pararGPS(); this.falloGPS('Permiso de ubicación denegado. Actívalo en el navegador para poder registrar.'); }
+    }, {enableHighAccuracy: true, maximumAge: 0, timeout: 20000});
+    this.timer = setTimeout(terminar, 15000);
+  },
+  falloGPS(msg) {
+    this.estadoGPS('mal', '⚠️', msg, API.demo ? 'En la demo puedes simular la ubicación con los botones de abajo.' : 'Sin ubicación no se puede registrar la visita.');
+    $('#f-gps-retry').classList.remove('hidden');
+  },
+  simularGPS(tipo) {
+    this.pararGPS();
+    let base;
+    if (tipo === 'cerca') {
+      const ps = Vendedor.puntosLocales();
+      const p = ps[Math.floor(Math.random() * ps.length)];
+      if (!p) return toast('No hay tiendas registradas para simular', true);
+      base = {lat: p.lat + 0.00007, lng: p.lng + 0.00005};
+    } else if (this.modo === 'revisita') base = {lat: this.punto.lat + 0.00004, lng: this.punto.lng};
+    else base = {lat: CONFIG.CENTRO_MAPA[0] + (Math.random() - .5) * 0.012, lng: CONFIG.CENTRO_MAPA[1] + (Math.random() - .5) * 0.008};
+    this.recibirGPS({...base, acc: 8 + Math.round(Math.random() * 10)});
+  },
+  recibirGPS(g) {
+    if (g.acc > CONFIG.PRECISION_MAX_M) {
+      this.estadoGPS('mal', '⚠️', `Ubicación muy imprecisa (±${g.acc} m)`, `Se necesita ±${CONFIG.PRECISION_MAX_M} m o menos. Sal a la vereda, lejos de techos, y vuelve a intentar.`);
+      $('#f-gps-retry').classList.remove('hidden');
+      return;
+    }
+    this.gps = g;
+    this.estadoGPS('ok', '📍', `Ubicación registrada (±${g.acc} m)`, 'La hora se registrará al guardar.');
+    $('#f-gps-retry').classList.add('hidden');
+    $$('.js-demo-gps').forEach(b => b.classList.add('hidden'));
+    const mm = $('#f-minimapa'); mm.classList.remove('hidden');
+    if (!this.mini && Mapas.ok()) {
+      this.mini = Mapas.crear(mm, {zoom: false, leaflet: {dragging: false, scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false, keyboard: false}});
+      this.miniCapa = L.layerGroup().addTo(this.mini);
+    }
+    if (this.mini) {
+      this.mini.invalidateSize(); this.miniCapa.clearLayers();
+      L.circle([g.lat, g.lng], {radius: g.acc, color: CONFIG.COLOR, weight: 1, fillOpacity: .15}).addTo(this.miniCapa);
+      L.marker([g.lat, g.lng], {icon: Mapas.icono('•', CONFIG.COLOR)}).addTo(this.miniCapa);
+      this.mini.setView([g.lat, g.lng], 18);
+    }
+    if (this.modo === 'revisita') {
+      const d = Math.round(distM(g, this.punto));
+      if (d > CONFIG.RADIO_REVISITA_M) {
+        this.gps = null;
+        this.estadoGPS('mal', '⚠️', `Estás a ${d} m de la tienda`, `Para registrar la revisita tienes que estar en la tienda (a menos de ${CONFIG.RADIO_REVISITA_M} m).`);
+        $('#f-gps-retry').classList.remove('hidden');
+        return;
+      }
+      return this.mostrarFicha();
+    }
+    this.sugerirDireccion(g);
+    this.revisarCercanas();
+  },
+  // Dirección automática a partir del GPS (OpenStreetMap / Nominatim, gratis). El vendedor puede corregirla.
+  async sugerirDireccion(g) {
+    const inp = $('#f-direccion'), nota = $('#f-dir-nota');
+    if (inp.value.trim() && inp.value !== this.dirAuto) return; // ya la escribió el vendedor
+    nota.textContent = '📍 Buscando la dirección…'; nota.classList.remove('hidden');
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 8000);
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${g.lat}&lon=${g.lng}&zoom=18&addressdetails=1&accept-language=es`, {signal: ctl.signal});
+      clearTimeout(t);
+      const a = (await r.json()).address || {};
+      if (this.gps !== g) return; // se cerró el formulario o cambió la ubicación
+      const via = a.road || a.pedestrian || a.footway || a.residential || a.path || '';
+      if (!via) throw new Error('sin calle');
+      const distrito = a.city_district || a.suburb || a.quarter || a.neighbourhood || '';
+      const dl = buscarDistrito(a.city_district) || buscarDistrito(a.suburb) || buscarDistrito(a.city) || buscarDistrito(a.town);
+      if (dl && !$('#f-distrito').value) $('#f-distrito').value = dl;
+      const dir = [via + (a.house_number ? ' ' + a.house_number : ''), distrito].filter(Boolean).join(', ');
+      if (inp.value.trim() && inp.value !== this.dirAuto) return;
+      inp.value = dir; this.dirAuto = dir;
+      const n = via.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const tipo = /^(avenida|av\.?)\s/.test(n) ? 'Avenida' : /^(calle|ca\.?)\s/.test(n) ? 'Calle' : /^(jiron|jr\.?)\s/.test(n) ? 'Jirón' : /^(pasaje|psje\.?|pje\.?)\s/.test(n) ? 'Pasaje' : '';
+      if (tipo && !$('#f-tipovia').value) $('#f-tipovia').value = tipo;
+      nota.textContent = a.house_number ? '📍 Dirección sugerida por el GPS. Revísala antes de guardar.' : '📍 Calle sugerida por el GPS. Agrega el número de la puerta.';
+    } catch (e) {
+      if (this.gps === g) nota.textContent = 'No se pudo obtener la dirección automáticamente. Escríbela.';
+    }
+  },
+  revisarCercanas() {
+    const cerca = Vendedor.puntosLocales()
+      .map(p => ({...p, d: Math.round(distM(this.gps, p))}))
+      .filter(p => p.d <= CONFIG.RADIO_CERCANIA_M).sort((a, b) => a.d - b.d).slice(0, 6);
+    if (!cerca.length) return this.mostrarFicha();
+    $('#f-cerca-lista').innerHTML = cerca.map(p => {
+      let acc;
+      if (p.estado === 'prospecto' && !p.pendiente) acc = `<div style="display:flex;flex-direction:column;gap:6px"><button class="btn prim" type="button" data-cerca-rapido="${esc(p.id)}" data-res="cierre" style="padding:8px 10px;font-size:12.5px">✓ Es esta:<br>cerrar venta</button><button class="btn peligro" type="button" data-cerca-rapido="${esc(p.id)}" data-res="visita" style="padding:8px 10px;font-size:12.5px">✕ Es esta: ya<br>no le interesa</button></div>`;
+      else if (p.estado === 'prospecto') acc = '<span class="small mut">Pendiente de subir</span>';
+      else acc = `<span class="small mut" style="text-align:right">Ya registrada<br>(${p.estado === 'cierre' ? 'cerrada' : 'no le interesó'})</span>`;
+      return `<div class="cerca-op">${imgFoto(p.fotoUrl)}
+        <div class="tx"><b>${esc(p.negocio)}</b><div class="small mut">${esc(p.direccion)} · a ${p.d} m</div>
+        <div style="margin-top:4px">${chipRes({resultado: p.estado})} <span class="small mut">${esc(p.vendedor || '')}</span></div></div>${acc}</div>`;
+    }).join('');
+    $('#f-cerca').classList.remove('hidden');
+  },
+  mostrarFicha() {
+    $('#f-cerca').classList.add('hidden');
+    $('#f-ficha').classList.remove('hidden');
+    if (this.modo === 'nueva') setTimeout(() => $('#f-foto-box').scrollIntoView({behavior: 'smooth', block: 'center'}), 50);
+  },
+  pasarARevisita(id) {
+    const p = Vendedor.puntosLocales().find(x => x.id === id);
+    if (!p) return;
+    const gps = this.gps;
+    this.modo = 'revisita'; this.punto = p; this.resInicial = null;
+    $('#f-titulo').textContent = 'Actualizar prospecto';
+    $$('.solo-nueva').forEach(el => el.classList.add('hidden'));
+    this.pintarResultados();
+    const ri = $('#f-rev-info'); ri.classList.remove('hidden');
+    ri.innerHTML = `<div style="display:flex;gap:10px;align-items:center">${imgFoto(p.fotoUrl).replace('<img', '<img style="width:64px;height:64px;border-radius:8px;object-fit:cover"')}
+      <div><b>${esc(p.negocio)}</b><div class="small mut">${esc(p.direccion)}</div><div style="margin-top:4px"><span class="chip prospecto">Prospecto</span></div></div></div>`;
+    this.recibirGPS(gps);
+  },
+  async tomarFoto(e) {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      this.foto = await comprimirFoto(f, API.demo ? 640 : 1280, API.demo ? 0.6 : 0.72);
+      const box = $('#f-foto-box');
+      box.querySelectorAll(':scope > :not(input)').forEach(n => n.remove());
+      const img = document.createElement('img'); img.src = this.foto; box.appendChild(img);
+    } catch (err) { toast(err.message, true); }
+  },
+  async guardar(ev) {
+    ev.preventDefault();
+    const val = id => $(id).value.trim();
+    const res = $('#f-resultados input:checked')?.value;
+    const errores = [];
+    if (!this.gps) errores.push('Falta la ubicación GPS');
+    if (!this.foto) errores.push('Falta la foto de la fachada');
+    if (this.modo === 'nueva') {
+      if (!val('#f-negocio')) errores.push('Falta el nombre del negocio');
+      if (!val('#f-direccion')) errores.push('Falta la dirección');
+      if (!val('#f-tipovia')) errores.push('Indica si es calle o avenida');
+      if (!val('#f-canal')) errores.push('Elige el tipo de punto');
+      if (!val('#f-distrito')) errores.push('Elige el distrito');
+    }
+    if (!val('#f-congeladora')) errores.push('Indica la congeladora ofrecida');
+    if (!res) errores.push('Elige el resultado');
+    if (this.pideMotivo(res) && !val('#f-motivo')) errores.push(res === 'visita' ? 'Indica por qué ya no le interesa' : 'Indica por qué no se cerró');
+    const tel = val('#f-telefono');
+    if (this.modo === 'nueva' && tel && !/^[0-9 +()-]{6,}$/.test(tel)) errores.push('El teléfono no parece válido');
+    const box = $('#f-error');
+    if (errores.length) { box.innerHTML = errores.map(esc).join('<br>'); box.classList.remove('hidden'); box.scrollIntoView({behavior: 'smooth', block: 'center'}); return; }
+    box.classList.add('hidden');
+
+    const ahora = new Date(); const id = uid();
+    const p = this.punto;
+    const visita = {
+      id, fechaHora: isoLocal(ahora), fecha: isoDia(ahora),
+      usuario: Sesion.s.usuario, vendedor: Sesion.s.nombre,
+      tipo: this.modo, puntoId: this.modo === 'nueva' ? id : p.id,
+      negocio: this.modo === 'nueva' ? val('#f-negocio') : p.negocio,
+      direccion: this.modo === 'nueva' ? val('#f-direccion') : p.direccion,
+      tipoVia: this.modo === 'nueva' ? val('#f-tipovia') : '',
+      tipoPunto: this.modo === 'nueva' ? val('#f-canal') : (p.tipoPunto || ''),
+      distrito: this.modo === 'nueva' ? val('#f-distrito') : (p.distrito || ''),
+      contacto: this.modo === 'nueva' ? val('#f-contacto') : '',
+      cargo: this.modo === 'nueva' ? val('#f-cargo') : '',
+      telefono: this.modo === 'nueva' ? tel : '',
+      congeladora: val('#f-congeladora'), resultado: res,
+      motivo: this.pideMotivo(res) ? val('#f-motivo') : '', observaciones: val('#f-obs'),
+      lat: +this.gps.lat.toFixed(6), lng: +this.gps.lng.toFixed(6), precision: this.gps.acc
+    };
+    $('#f-guardar').disabled = true;
+    try {
+      await Cola.poner({id, visita, foto: this.foto});
+      this.cerrar();
+      toast('Visita guardada ✓');
+      await Vendedor.render();
+      sincronizar();
+    } catch (e) { toast('No se pudo guardar en el celular: ' + e.message, true); }
+    finally { $('#f-guardar').disabled = false; }
+  }
+};
+
+/* =====================================================================
+   ACCIÓN RÁPIDA SOBRE UN PROSPECTO: cerrar venta / ya no le interesa
+   Usa los datos y la foto que ya existen de la tienda; solo verifica con el GPS
+   que el vendedor esté en el lugar.
+   ===================================================================== */
+const Rapido = {
+  p: null, res: null, gps: null, watch: null, timer: null,
+  abrir(p, res, gps = null) {
+    Object.assign(this, {p, res, gps: null});
+    const cierre = res === 'cierre';
+    const opts = (arr, sel, ph) => `<option value="">${ph}</option>` + arr.map(x => `<option ${x === sel ? 'selected' : ''}>${esc(x)}</option>`).join('');
+    $('#modal').innerHTML = `<div class="card"><div class="cuerpo">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><h2>${cierre ? '✓ Cerrar venta' : '✕ Ya no le interesa'}</h2><button class="btn-ico" data-rapido-cerrar>✕</button></div>
+      <div class="cerca-op" style="margin-top:10px">${imgFoto(p.fotoUrl)}
+        <div class="tx"><b>${esc(p.negocio)}</b><div class="small mut">${esc(p.direccion)}${p.distrito ? ' · ' + esc(p.distrito) : ''}</div>
+        ${p.contacto ? `<div class="small mut">Contacto: ${esc(p.contacto)}${p.cargo ? ' (' + esc(p.cargo) + ')' : ''}</div>` : ''}</div></div>
+      <div class="gps busca" id="r-gps" style="margin:4px 0 2px"><span class="ico">📡</span><span id="r-gps-txt">Verificando que estés en la tienda…</span></div>
+      <div class="small mut" id="r-gps-sub">Se usan los datos y la foto que ya tienes de esta tienda. No tienes que volver a llenarlos.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn sec hidden" id="r-reintentar" type="button">↻ Volver a intentar</button>
+        ${API.demo ? '<button class="btn sec" id="r-simular" type="button">Simular estar en la tienda (demo)</button>' : ''}
+      </div>
+      <details style="margin-top:10px"><summary class="small" style="cursor:pointer;font-weight:600">${cierre ? 'Congeladora instalada' : 'Motivo'} y nota (opcional)</summary>
+        ${cierre ? `<label class="f" for="r-cong">Congeladora instalada</label><select id="r-cong">${opts(Listas.congeladoras, p.congeladora, 'Sin especificar')}</select>`
+                 : `<label class="f" for="r-motivo">¿Por qué ya no le interesa?</label><select id="r-motivo">${opts(Listas.motivos, '', 'Sin especificar')}</select>`}
+        <label class="f" for="r-obs">Nota</label><input id="r-obs" placeholder="${cierre ? 'Ej.: se instala el lunes' : 'Ej.: ya trabaja con otra marca'}">
+      </details>
+      <button class="btn ${cierre ? 'prim' : 'peligro'} grande" id="r-confirmar" style="margin-top:14px" disabled>${cierre ? 'Confirmar: venta cerrada' : 'Confirmar: ya no le interesa'}</button>
+    </div></div>`;
+    $('#modal').classList.remove('hidden');
+    $('[data-rapido-cerrar]').onclick = () => this.cerrar();
+    $('#r-reintentar').onclick = () => this.ubicar();
+    if ($('#r-simular')) $('#r-simular').onclick = () => this.recibir({lat: p.lat + 0.00003, lng: p.lng, acc: 9});
+    $('#r-confirmar').onclick = () => this.guardar();
+    if (gps) this.recibir(gps); else this.ubicar();
+  },
+  cerrar() { this.parar(); $('#modal').classList.add('hidden'); },
+  parar() { if (this.watch != null) navigator.geolocation.clearWatch(this.watch); clearTimeout(this.timer); this.watch = null; },
+  estado(clase, ico, txt) { const g = $('#r-gps'); if (!g) return; g.className = 'gps ' + clase; g.querySelector('.ico').textContent = ico; $('#r-gps-txt').textContent = txt; },
+  ubicar() {
+    this.parar(); this.gps = null; $('#r-confirmar').disabled = true; $('#r-reintentar').classList.add('hidden');
+    this.estado('busca', '📡', 'Verificando que estés en la tienda…');
+    if (!navigator.geolocation) return this.fallo('Este equipo no tiene GPS disponible.');
+    let mejor = null;
+    const fin = () => { this.parar(); mejor ? this.recibir(mejor) : this.fallo('No se pudo obtener tu ubicación. Activa el GPS.'); };
+    this.watch = navigator.geolocation.watchPosition(pos => {
+      const c = pos.coords;
+      if (!mejor || c.accuracy < mejor.acc) mejor = {lat: c.latitude, lng: c.longitude, acc: Math.round(c.accuracy)};
+      if (mejor.acc <= 15) fin();
+    }, err => { if (err.code === 1) { this.parar(); this.fallo('Permiso de ubicación denegado. Actívalo para continuar.'); } },
+    {enableHighAccuracy: true, maximumAge: 0, timeout: 20000});
+    this.timer = setTimeout(fin, 15000);
+  },
+  fallo(msg) { this.estado('mal', '⚠️', msg); $('#r-reintentar').classList.remove('hidden'); },
+  recibir(g) {
+    this.parar();
+    if (!$('#r-gps')) return;
+    if (g.acc > CONFIG.PRECISION_MAX_M) return this.fallo(`Ubicación imprecisa (±${g.acc} m). Sal a la vereda y vuelve a intentar.`);
+    const d = Math.round(distM(g, this.p));
+    if (d > CONFIG.RADIO_REVISITA_M) return this.fallo(`Estás a ${d} m de la tienda. Tienes que estar en el lugar (a menos de ${CONFIG.RADIO_REVISITA_M} m).`);
+    this.gps = g;
+    this.estado('ok', '📍', `Estás en la tienda (a ${d} m) ✓`);
+    $('#r-reintentar').classList.add('hidden');
+    if ($('#r-simular')) $('#r-simular').classList.add('hidden');
+    $('#r-confirmar').disabled = false;
+  },
+  async guardar() {
+    if (!this.gps) return;
+    const p = this.p, ahora = new Date(), id = uid(), cierre = this.res === 'cierre';
+    const visita = {
+      id, fechaHora: isoLocal(ahora), fecha: isoDia(ahora), usuario: Sesion.s.usuario, vendedor: Sesion.s.nombre,
+      tipo: 'revisita', puntoId: p.id, negocio: p.negocio, direccion: p.direccion, tipoPunto: p.tipoPunto || '', distrito: p.distrito || '',
+      tipoVia: p.tipoVia || '', contacto: p.contacto || '', cargo: p.cargo || '', telefono: p.telefono || '',
+      congeladora: cierre ? ($('#r-cong').value || p.congeladora || '') : (p.congeladora || ''),
+      resultado: this.res, motivo: cierre ? '' : $('#r-motivo').value, observaciones: $('#r-obs').value.trim(),
+      lat: +this.gps.lat.toFixed(6), lng: +this.gps.lng.toFixed(6), precision: this.gps.acc,
+      fotoUrl: String(p.fotoUrl || '').startsWith('data:') && !API.demo ? '' : (p.fotoUrl || '')
+    };
+    $('#r-confirmar').disabled = true;
+    try {
+      await Cola.poner({id, visita, foto: null});
+      this.cerrar();
+      toast(cierre ? '¡Venta cerrada! ✓' : 'Marcada como "ya no le interesa"');
+      await Vendedor.render();
+      sincronizar();
+    } catch (e) { toast('No se pudo guardar: ' + e.message, true); $('#r-confirmar').disabled = false; }
+  }
+};
+
+/* =====================================================================
+   VISTA SUPERVISOR
+   ===================================================================== */
+const Supervisor = {
+  datos: {visitas: [], revisiones: [], vendedores: []}, puntos: new Map(),
+  desde: hoyISO(), hasta: hoyISO(), tab: 'todos', dia: null, mapa: null, capa: null, timer: null, claveEncuadre: '', fCanal: '', fDistrito: '',
+  pasa(b) { return (!this.fCanal || b.tipoPunto === this.fCanal) && (!this.fDistrito || b.distrito === this.fDistrito); },
+  async iniciar() {
+    const esAdmin = Sesion.s.rol === 'admin';
+    $('#s-nombre').textContent = Sesion.s.nombre + (esAdmin ? ' · administrador (todos los equipos)' : ' · supervisor');
+    $('#s-admin').classList.toggle('hidden', !esAdmin);
+    poblarSelects();
+    if (!this.mapa) { this.mapa = Mapas.crear($('#s-mapa')); if (this.mapa) this.capa = L.layerGroup().addTo(this.mapa); }
+    this.setRango('hoy', false);
+    await this.cargar();
+    setTimeout(() => this.mapa && this.mapa.invalidateSize(), 100);
+    clearInterval(this.timer);
+    this.timer = setInterval(() => this.cargar(true), CONFIG.REFRESCO_SUPERVISOR_S * 1000);
+  },
+  detener() { clearInterval(this.timer); },
+  setRango(r, render = true) {
+    const hoy = hoyISO();
+    if (r === 'hoy') [this.desde, this.hasta] = [hoy, hoy];
+    if (r === 'ayer') [this.desde, this.hasta] = [sumarDias(hoy, -1), sumarDias(hoy, -1)];
+    if (r === '7') [this.desde, this.hasta] = [sumarDias(hoy, -6), hoy];
+    if (r === 'mes') [this.desde, this.hasta] = [hoy.slice(0, 8) + '01', hoy];
+    $('#s-desde').value = this.desde; $('#s-hasta').value = this.hasta;
+    $$('[data-rango]').forEach(b => b.classList.toggle('on', b.dataset.rango === r));
+    this.dia = null;
+    if (render) this.render();
+  },
+  async cargar(silencioso = false) {
+    try {
+      const d = await API.call('supervisorDatos');
+      this.datos = {visitas: d.visitas.map(normalizarVisita), revisiones: d.revisiones || [], vendedores: d.vendedores || []};
+      Listas.aplicar(d.listas);
+      if (this.tab !== 'todos' && this.tab !== '__dup' && !this.datos.vendedores.some(v => v.usuario === this.tab)) this.tab = 'todos';
+      this.puntos = construirPuntos(this.datos.visitas, this.datos.revisiones);
+      $('#s-act').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-PE', {hour: '2-digit', minute: '2-digit'});
+      this.render(silencioso);
+    } catch (e) {
+      if (manejarAuth(e)) return;
+      if (!silencioso) toast(e instanceof SinSenal ? 'Sin conexión. Mostrando los últimos datos.' : e.message, true);
+    }
+  },
+  colorVendedor(u) {
+    const i = this.datos.vendedores.findIndex(v => v.usuario === u);
+    return COLORES_VENDEDOR[(i < 0 ? 0 : i) % COLORES_VENDEDOR.length];
+  },
+  nombreDe(u) { return this.datos.vendedores.find(v => v.usuario === u)?.nombre || u; },
+  visitasFiltradas() {
+    const out = [];
+    for (const p of this.puntos.values()) {
+      if (p.anulado || !this.pasa(p.base)) continue;
+      for (const v of p.visitas) {
+        if (v.fecha < this.desde || v.fecha > this.hasta) continue;
+        if (this.tab !== 'todos' && v.usuario !== this.tab) continue;
+        out.push(v);
+      }
+    }
+    return out.sort((a, b) => a.fechaHora.localeCompare(b.fechaHora));
+  },
+  render(silencioso = false) {
+    const pares = paresDuplicados(this.puntos, this.datos.revisiones);
+    $('#s-tabs').innerHTML = [`<button data-st="todos" class="${this.tab === 'todos' ? 'on' : ''}">Todos</button>`,
+      ...this.datos.vendedores.map(v => `<button data-st="${esc(v.usuario)}" class="${this.tab === v.usuario ? 'on' : ''}"><i class="dot" style="background:${this.colorVendedor(v.usuario)}"></i> ${esc(v.nombre)}</button>`),
+      `<button data-st="__dup" class="warn ${this.tab === '__dup' ? 'on' : ''}">⚠ Posibles duplicados (${pares.length})</button>`].join('');
+    const esDup = this.tab === '__dup';
+    $('#s-vista-principal').classList.toggle('hidden', esDup);
+    $('#s-vista-dup').classList.toggle('hidden', !esDup);
+    if (esDup) return this.renderDuplicados(pares);
+
+    const usuario = this.tab === 'todos' ? null : this.tab;
+    let visitas = this.visitasFiltradas();
+    const dias = [...new Set(visitas.map(v => v.fecha))].sort();
+    if (this.dia && !dias.includes(this.dia)) this.dia = null;
+    const filtro = b => this.pasa(b);
+    const k = calcularKpis(this.puntos, {desde: this.desde, hasta: this.hasta, usuario, dia: this.dia, filtro});
+    $('#s-sin-equipo').classList.toggle('hidden', this.datos.vendedores.length > 0 || Sesion.s.rol === 'admin');
+    const act = $('#s-actividad');
+    act.classList.toggle('hidden', !usuario);
+    if (usuario) {
+      const vd = this.datos.vendedores.find(v => v.usuario === usuario) || {};
+      const ult = this.ultimaVisita(usuario);
+      const hoyK = calcularKpis(this.puntos, {desde: hoyISO(), hasta: hoyISO(), usuario});
+      act.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;font-size:14px">
+        <div><span class="small mut">Última actividad en la app</span><br><b>${actvHtml(vd.ultimaActividad)}</b>${vd.ultimaActividad ? ` <span class="small mut">(${esc(actividad(vd.ultimaActividad).hora)})</span>` : ''}</div>
+        <div><span class="small mut">Última visita registrada</span><br><b>${ult ? esc((ult.fecha === hoyISO() ? 'hoy ' : fechaCorta(ult.fecha) + ' ') + horaDe(ult.fechaHora)) + '</b> · ' + esc(ult.negocio) : 'Sin visitas</b>'}</div>
+        <div><span class="small mut">Meta de hoy</span><br><b>${hoyK.visitados}${+vd.metaDiaria ? ' de ' + vd.metaDiaria : ''} visitas</b></div>
+        ${(vd.canales || []).length || (vd.distritos || []).length ? `<div><span class="small mut">Asignado a</span><br>${esc([...(vd.canales || []), ...(vd.distritos || [])].join(' · '))}</div>` : ''}
+      </div>`;
+    }
+    $('#s-k-vis').textContent = k.visitados; $('#s-k-pro').textContent = k.prospectos;
+    $('#s-k-cie').textContent = k.cierres; $('#s-k-air').textContent = k.enAire; $('#s-k-conv').textContent = k.conv + '%';
+
+    // selector de días
+    const dw = $('#s-dias');
+    dw.classList.toggle('hidden', dias.length < 2);
+    dw.innerHTML = `<button data-dia="" class="${!this.dia ? 'on' : ''}">Todos los días</button>` +
+      dias.map(d => `<button data-dia="${d}" class="${this.dia === d ? 'on' : ''}">${esc(fechaCorta(d))} · ${visitas.filter(v => v.fecha === d).length}</button>`).join('');
+    if (this.dia) visitas = visitas.filter(v => v.fecha === this.dia);
+    const quien = usuario ? this.nombreDe(usuario) : 'Todos los vendedores';
+    const cuando = this.dia ? fechaLarga(this.dia) : (this.desde === this.hasta ? fechaLarga(this.desde) : `${fechaCorta(this.desde)} al ${fechaCorta(this.hasta)}`);
+    $('#s-ruta-titulo').textContent = `Ruta de ${quien} · ${cuando}`;
+
+    // mapa
+    if (this.mapa) {
+      const pts = Mapas.dibujar(this.mapa, this.capa, visitas, {ruta: $('#s-ruta').checked, colorVendedor: u => this.colorVendedor(u), onClick: v => this.detalle(v)});
+      const clave = [this.desde, this.hasta, this.tab, this.dia].join('|');
+      if (!silencioso || clave !== this.claveEncuadre) { Mapas.encuadrar(this.mapa, pts); this.claveEncuadre = clave; }
+    }
+
+    // ranking (solo en Todos)
+    const rw = $('#s-rank-wrap');
+    if (!usuario) {
+      const filas = this.datos.vendedores.map(v => ({v, k: calcularKpis(this.puntos, {desde: this.desde, hasta: this.hasta, usuario: v.usuario, dia: this.dia, filtro})}))
+        .sort((a, b) => b.k.cierres - a.k.cierres || b.k.visitados - a.k.visitados);
+      rw.innerHTML = `<h3 style="margin-bottom:6px">Resumen por vendedor</h3><table class="rank"><tr><th>Vendedor</th><th>Visit.</th><th>Prosp.</th><th>Cierres</th><th>Abiertos</th><th>%</th></tr>` +
+        filas.map(({v, k}) => `<tr class="clic" data-st="${esc(v.usuario)}"><td><i class="dot" style="background:${this.colorVendedor(v.usuario)}"></i> ${esc(v.nombre)}<div class="small mut" style="margin-top:2px">${actvHtml(v.ultimaActividad)}</div></td><td>${k.visitados}</td><td>${k.prospectos}</td><td><b>${k.cierres}</b></td><td>${k.enAire}</td><td>${k.conv}%</td></tr>`).join('') +
+        `</table><div class="small mut" style="margin-top:6px">El punto junto a cada nombre indica su última actividad en la app: <i class="dot" style="background:#16a34a"></i> hace menos de 30 min · <i class="dot" style="background:#d97706"></i> menos de 2 h · <i class="dot" style="background:#94a3b8"></i> más.</div><div style="height:14px"></div>`;
+    } else rw.innerHTML = '';
+
+    // lista de visitas
+    $('#s-lista-tit').textContent = `Visitas (${visitas.length})`;
+    const nums = {}; const grupos = {};
+    for (const v of visitas) (grupos[v.usuario + '|' + v.fecha] ||= []).push(v);
+    for (const g of Object.values(grupos)) g.forEach((v, i) => nums[v.id] = i + 1);
+    $('#s-lista').innerHTML = visitas.length ? [...visitas].reverse().map(v => `
+      <div class="item" data-vid="${esc(v.id)}">
+        <div class="num" style="background:${RES[v.resultado].c}">${nums[v.id]}</div>
+        ${imgFoto(v.fotoUrl)}
+        <div class="tx"><b>${esc(v.negocio)}</b><small>${esc(fechaCorta(v.fecha))} ${horaDe(v.fechaHora)} · ${esc(v.vendedor)}</small>
+          <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${chipRes(v)}${v.tipo === 'revisita' ? '<span class="chip rev">Revisita</span>' : ''}</div></div>
+      </div>`).join('') : '<div class="vacio">No hay visitas en este periodo.</div>';
+  },
+  ultimaVisita(u) {
+    let ult = null;
+    for (const v of this.datos.visitas) if (v.usuario === u && (!ult || v.fechaHora > ult.fechaHora)) ult = v;
+    return ult;
+  },
+  renderDuplicados(pares) {
+    $('.js-rdup').textContent = CONFIG.RADIO_DUPLICADO_M;
+    const lado = (p, et) => { const b = p.base; return `<div class="lado">${imgFoto(b.fotoUrl)}<div class="tx">
+      <div class="small mut">${et}</div><b>${esc(b.negocio)}</b><div class="mut">${esc(b.direccion)}</div>
+      <div style="margin:4px 0">${chipRes({resultado: p.estado})}</div>
+      <div class="small">${esc(b.vendedor)} · ${esc(fechaCorta(b.fecha))} ${horaDe(b.fechaHora)}</div>
+      ${b.contacto ? `<div class="small mut">Contacto: ${esc(b.contacto)}</div>` : ''}</div></div>`; };
+    $('#s-dup-lista').innerHTML = pares.length ? pares.map(x => `
+      <div class="card">
+        <div class="small" style="margin-bottom:8px"><b>A ${x.d} m de distancia</b> · nombres ${Math.round(x.sim * 100)}% parecidos</div>
+        <div class="dup">${lado(x.a, 'Registrada primero')}${lado(x.b, 'Registrada después')}</div>
+        <div class="dup-acc">
+          <button class="btn sec" data-par="${esc(x.a.id)}|${esc(x.b.id)}|distintas">✓ Son tiendas distintas</button>
+          <button class="btn peligro" data-par="${esc(x.a.id)}|${esc(x.b.id)}|duplicado">Es la misma: anular la registrada después</button>
+        </div>
+      </div>`).join('') : '<div class="vacio">No hay posibles duplicados por revisar. ✓</div>';
+  },
+  async revisarPar(idA, idB, decision) {
+    if (decision === 'duplicado' && !confirm('La tienda registrada después dejará de contar en los números del vendedor. ¿Continuar?')) return;
+    try {
+      await API.call('revisarPar', {idA, idB, decision});
+      toast(decision === 'duplicado' ? 'Duplicado anulado' : 'Marcadas como tiendas distintas');
+      await this.cargar();
+    } catch (e) { toast(e.message, true); }
+  },
+  detalle(v) {
+    const p = this.puntos.get(v.tipo === 'nueva' ? v.id : v.puntoId);
+    const b = p?.base || v;
+    const fila = (t, x) => x ? `<dt>${t}</dt><dd>${esc(x)}</dd>` : '';
+    $('#modal').innerHTML = `<div class="card">
+      ${v.fotoUrl ? `<img class="grande" src="${esc(v.fotoUrl)}" alt="">` : ''}
+      <div class="cuerpo">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:start">
+          <div><h2>${esc(b.negocio)}</h2><div class="mut small">${esc(b.direccion)}${b.tipoVia ? ' · ' + esc(b.tipoVia) : ''}</div></div>
+          <button class="btn-ico" data-cerrar-modal>✕</button>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">${chipRes(v)}${v.tipo === 'revisita' ? '<span class="chip rev">Revisita</span>' : ''}<span class="chip visita">Estado actual: ${esc(RES[p?.estado || v.resultado].t)}</span></div>
+        <dl class="ficha">
+          ${fila('Vendedor', v.vendedor)}${fila('Fecha y hora', fechaLarga(v.fecha) + ', ' + horaDe(v.fechaHora))}
+          ${fila('Tipo de punto', b.tipoPunto)}${fila('Distrito', b.distrito)}
+          ${fila('Contacto', b.contacto)}${fila('¿Quién es?', b.cargo)}${fila('Teléfono', b.telefono)}
+          ${fila('Congeladora', v.congeladora)}${fila('Motivo', v.motivo)}${fila('Observaciones', v.observaciones)}
+          ${fila('Precisión GPS', '±' + v.precision + ' m')}
+        </dl>
+        ${p && p.visitas.length > 1 ? `<h3 style="margin-top:14px">Historial de la tienda</h3><div class="hist">${p.visitas.map(x =>
+          `<div><b>${esc(fechaCorta(x.fecha))} ${horaDe(x.fechaHora)}</b> · ${esc(x.vendedor)} · ${chipRes(x)} ${x.motivo ? '<span class="mut">' + esc(x.motivo) + '</span>' : ''}</div>`).join('')}</div>` : ''}
+        <a class="btn sec" style="display:inline-block;margin-top:14px;text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${v.lat},${v.lng}">Ver en Google Maps ↗</a>
+      </div></div>`;
+    $('#modal').classList.remove('hidden');
+  },
+  exportarCSV() {
+    const cols = ['fecha', 'fechaHora', 'vendedor', 'tipo', 'tipoPunto', 'negocio', 'direccion', 'distrito', 'tipoVia', 'contacto', 'cargo', 'telefono', 'congeladora', 'resultado', 'motivo', 'observaciones', 'lat', 'lng', 'precision', 'fotoUrl'];
+    const vs = this.visitasFiltradas().filter(v => !this.dia || v.fecha === this.dia);
+    const q = x => '"' + String(x ?? '').replace(/"/g, '""') + '"';
+    const csv = '﻿' + [cols.join(','), ...vs.map(v => cols.map(c => q(c === 'fotoUrl' && String(v[c]).startsWith('data:') ? '' : v[c])).join(','))].join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+    a.download = `visitas_${this.desde}_${this.hasta}.csv`; a.click();
+  }
+};
+
+/* =====================================================================
+   CAMBIO DE PIN Y MENÚ DE CUENTA
+   ===================================================================== */
+const PinScreen = {
+  obligatorio: false,
+  abrir(obligatorio) {
+    this.obligatorio = obligatorio;
+    Supervisor.detener();
+    $('#pin-intro').textContent = obligatorio ? 'Por seguridad, reemplaza el PIN temporal que te dieron por uno que solo tú conozcas.' : 'Escribe tu nuevo PIN.';
+    $('#pin-cancelar').classList.toggle('hidden', obligatorio);
+    $('#pin-form').reset();
+    mostrar('pinscreen');
+    setTimeout(() => $('#pin-1').focus(), 50);
+  },
+  async guardar(e) {
+    e.preventDefault();
+    const a = $('#pin-1').value.trim(), b = $('#pin-2').value.trim();
+    const problema = validarPinNuevo(a, Sesion.s.pin);
+    if (problema) return toast(problema, true);
+    if (a !== b) return toast('Los dos PIN no coinciden', true);
+    try {
+      await API.call('cambiarPin', {pinNuevo: a});
+      Sesion.guardar({...Sesion.s, pin: a, debeCambiarPin: false});
+      toast('PIN guardado ✓');
+      arrancar();
+    } catch (err) { if (!(err.auth && err.auth !== 'cambiarPin' && manejarAuth(err))) toast(err instanceof SinSenal ? 'Necesitas conexión para cambiar el PIN.' : err.message, true); }
+  }
+};
+function abrirMenuCuenta() {
+  const s = Sesion.s;
+  const rol = {vendedor: 'Vendedor', supervisor: 'Supervisor', admin: 'Administrador'}[s.rol];
+  $('#modal').innerHTML = `<div class="card"><div class="cuerpo">
+    <div style="display:flex;justify-content:space-between;align-items:start"><div><h2>${esc(s.nombre)}</h2><div class="small mut">${esc(s.usuario)} · ${rol}</div></div><button class="btn-ico" data-cerrar-modal>✕</button></div>
+    <div class="menu-cta" style="margin-top:14px">
+      <button class="btn sec" id="m-pin">🔒 Cambiar mi PIN</button>
+      <button class="btn peligro" id="m-salir">Cerrar sesión</button>
+    </div></div></div>`;
+  $('#modal').classList.remove('hidden');
+  $('#m-pin').onclick = () => { $('#modal').classList.add('hidden'); PinScreen.abrir(false); };
+  $('#m-salir').onclick = () => { $('#modal').classList.add('hidden'); salir(); };
+}
+
+/* =====================================================================
+   PANEL DE ADMINISTRADOR: usuarios, roles, equipos y listas
+   ===================================================================== */
+const ROLES = {vendedor: 'Vendedor', supervisor: 'Supervisor', admin: 'Administrador'};
+const Admin = {
+  usuarios: [], tab: 'usuarios',
+  async iniciar() {
+    $('#a-nombre').textContent = Sesion.s.nombre + ' · administrador';
+    await this.cargar();
+  },
+  async cargar() {
+    try {
+      const d = await API.call('adminUsuarios');
+      this.usuarios = d.usuarios || [];
+      Listas.aplicar(d.listas);
+      this.render();
+    } catch (e) { if (!manejarAuth(e)) toast(e instanceof SinSenal ? 'Sin conexión' : e.message, true); }
+  },
+  de(u) { return this.usuarios.find(x => x.usuario === u); },
+  render() {
+    const rol = $('#a-f-rol').value, q = normTxt($('#a-buscar').value), inact = $('#a-f-inact').checked;
+    const lista = this.usuarios
+      .filter(u => (!rol || u.rol === rol) && (inact || u.activo) && (!q || normTxt(u.nombre + ' ' + u.usuario).includes(q)))
+      .sort((a, b) => ['admin', 'supervisor', 'vendedor'].indexOf(a.rol) - ['admin', 'supervisor', 'vendedor'].indexOf(b.rol) || a.nombre.localeCompare(b.nombre));
+    const n = r => this.usuarios.filter(u => u.rol === r && u.activo).length;
+    const pl = (k, a, b) => `${k} ${k === 1 ? a : b}`;
+    $('#a-resumen').textContent = `Activos: ${pl(n('vendedor'), 'vendedor', 'vendedores')} · ${pl(n('supervisor'), 'supervisor', 'supervisores')} · ${pl(n('admin'), 'administrador', 'administradores')}`;
+    const equipo = u => {
+      if (u.rol === 'vendedor') { const ss = (u.supervisores || []).map(x => this.de(x)).filter(Boolean); return ss.length ? `Supervisor${ss.length > 1 ? 'es' : ''}: <b>${esc(ss.map(x => x.nombre).join(', '))}</b>` : '<span style="color:#b45309">Sin supervisor</span>'; }
+      if (u.rol === 'supervisor') { const vs = this.usuarios.filter(v => v.rol === 'vendedor' && (v.supervisores || []).includes(u.usuario) && v.activo); return vs.length ? `${vs.length} vendedor${vs.length > 1 ? 'es' : ''}: ${esc(vs.map(v => v.nombre.split(' ')[0]).join(', '))}` : '<span style="color:#b45309">Sin vendedores</span>'; }
+      return '<span class="mut">Todos</span>';
+    };
+    const asign = u => u.rol !== 'vendedor' ? '' : [
+      (u.canales || []).length ? esc(u.canales.join(', ')) : '<span class="mut">Todos los tipos</span>',
+      (u.distritos || []).length ? esc(u.distritos.length > 3 ? u.distritos.slice(0, 3).join(', ') + ` y ${u.distritos.length - 3} más` : u.distritos.join(', ')) : '<span class="mut">Todos los distritos</span>',
+      +u.metaDiaria ? `Meta: ${u.metaDiaria} visitas/día` : ''].filter(Boolean).join('<br>');
+    $('#a-lista').innerHTML = lista.length ? `<table class="usr"><tr><th>Nombre</th><th>Rol</th><th>Equipo</th><th>Asignación</th><th>Última actividad</th><th>Estado</th><th>Acciones</th></tr>` +
+      lista.map(u => `<tr class="${u.activo ? '' : 'inact'}">
+        <td><b>${esc(u.nombre)}</b><div class="small mut">${esc(u.usuario)}${u.telefono ? ' · ' + esc(u.telefono) : ''}</div></td>
+        <td><span class="chip rol-${u.rol}">${ROLES[u.rol]}</span></td>
+        <td class="small">${equipo(u)}</td>
+        <td class="small">${asign(u)}</td>
+        <td class="small">${actvHtml(u.ultimaActividad)}</td>
+        <td class="small">${u.activo ? (u.bloqueado ? '<span style="color:#b91c1c">Bloqueado (PIN)</span>' : u.debeCambiarPin ? '<span style="color:#b45309">Debe crear su PIN</span>' : 'Activo') : 'Desactivado'}</td>
+        <td><div class="acc">
+          <button class="btn sec" data-a-editar="${esc(u.usuario)}">Editar</button>
+          <button class="btn sec" data-a-pin="${esc(u.usuario)}">Nuevo PIN</button>
+          ${u.usuario === Sesion.s.usuario ? '' : `<button class="btn ${u.activo ? 'peligro' : 'sec'}" data-a-activo="${esc(u.usuario)}">${u.activo ? 'Desactivar' : 'Activar'}</button>`}
+        </div></td></tr>`).join('') + '</table>'
+      : '<div class="vacio">No hay usuarios con ese filtro.</div>';
+  },
+  generarUsuario(nombre) {
+    const partes = normTxt(nombre).replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean);
+    if (!partes.length) return '';
+    const tomado = u => this.usuarios.some(x => x.usuario === u);
+    const cands = [partes[0], partes[1] && partes[0] + partes[1][0], partes[1] && partes[0] + partes[1]].filter(Boolean).map(x => x.slice(0, 20));
+    for (const c of cands) if (c.length >= 3 && !tomado(c)) return c;
+    let i = 2; while (tomado(cands[0] + i)) i++;
+    return (cands[0] + i).slice(0, 20);
+  },
+  formulario(u) {
+    const nuevo = !u;
+    u = u || {rol: 'vendedor', activo: true, canales: [], distritos: [], metaDiaria: ''};
+    const sups = this.usuarios.filter(x => x.rol === 'supervisor' && x.activo);
+    const vends = this.usuarios.filter(x => x.rol === 'vendedor' && x.activo);
+    const chk = (name, arr, sel) => arr.map(x => `<label><input type="checkbox" name="${name}" value="${esc(x)}" ${sel.includes(x) ? 'checked' : ''}> ${esc(x)}</label>`).join('');
+    $('#modal').innerHTML = `<div class="card" style="max-width:620px"><form class="cuerpo" id="u-form" novalidate>
+      <div style="display:flex;justify-content:space-between;align-items:start"><h2>${nuevo ? 'Nuevo usuario' : 'Editar usuario'}</h2><button type="button" class="btn-ico" data-cerrar-modal>✕</button></div>
+      <label class="f" for="u-nombre">Nombre completo *</label><input id="u-nombre" value="${esc(u.nombre || '')}" autocomplete="off">
+      <label class="f" for="u-usuario">Usuario para ingresar *</label><input id="u-usuario" value="${esc(u.usuario || '')}" ${nuevo ? '' : 'disabled'} autocapitalize="none" autocomplete="off">
+      <div class="small mut" style="margin-top:4px">${nuevo ? 'Se arma solo con el nombre. Solo minúsculas, números y punto.' : 'El usuario no se puede cambiar.'}</div>
+      <label class="f" for="u-rol">Rol *</label>
+      <select id="u-rol" ${u.usuario === Sesion.s.usuario ? 'disabled' : ''}>${Object.entries(ROLES).map(([k, t]) => `<option value="${k}" ${u.rol === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <label class="f" for="u-tel">Celular (para enviarle su acceso por WhatsApp) <span class="opc">(opcional)</span></label><input id="u-tel" type="tel" value="${esc(u.telefono || '')}" placeholder="9XX XXX XXX">
+      <div id="u-sec-vend">
+        <label class="f">Supervisores que lo ven <span class="opc">(puedes marcar varios)</span></label>
+        ${sups.length ? `<div class="checks">${sups.map(x => `<label><input type="checkbox" name="u-sups" value="${esc(x.usuario)}" ${(u.supervisores || []).includes(x.usuario) ? 'checked' : ''}> ${esc(x.nombre)}</label>`).join('')}</div>` : '<div class="small mut">Aún no hay supervisores.</div>'}
+        <label class="f">Tipos de punto asignados <span class="opc">(ninguno marcado = todos)</span></label>
+        <div class="checks">${chk('u-can', Listas.canales, u.canales || [])}</div>
+        <label class="f">Distritos asignados <span class="opc">(ninguno marcado = todos)</span></label>
+        <input id="u-dis-buscar" placeholder="Buscar distrito…" style="margin-bottom:6px;padding:8px 10px">
+        <div class="caja-lista"><div class="checks">${chk('u-dis', Listas.distritos, u.distritos || [])}</div></div>
+        <label class="f" for="u-meta">Meta diaria de visitas <span class="opc">(opcional)</span></label><input id="u-meta" type="number" min="0" max="200" value="${esc(u.metaDiaria || '')}" style="max-width:140px">
+      </div>
+      <div id="u-sec-sup">
+        <label class="f">Vendedores de su equipo</label>
+        ${vends.length ? `<div class="caja-lista"><div class="checks">${vends.map(v => { const otros = (v.supervisores || []).filter(x => x !== u.usuario).map(x => this.de(x)?.nombre || x); return `<label><input type="checkbox" name="u-eq" value="${esc(v.usuario)}" ${u.usuario && (v.supervisores || []).includes(u.usuario) ? 'checked' : ''}> ${esc(v.nombre)}${otros.length ? ` <span class="mut">(también con ${esc(otros.join(', '))})</span>` : ''}</label>`; }).join('')}</div></div>
+        <div class="small mut" style="margin-top:4px">Un vendedor puede estar en el equipo de varios supervisores.</div>` : '<div class="small mut">Aún no hay vendedores. Créalos y luego asígnalos aquí o desde su ficha.</div>'}
+      </div>
+      <div id="u-error" class="aviso rojo hidden" style="margin-top:12px"></div>
+      <div style="display:flex;gap:8px;margin-top:16px"><button class="btn prim" type="submit" style="flex:1">${nuevo ? 'Crear usuario' : 'Guardar cambios'}</button><button class="btn sec" type="button" data-cerrar-modal>Cancelar</button></div>
+    </form></div>`;
+    $('#modal').classList.remove('hidden');
+    const secciones = () => { const r = $('#u-rol').value; $('#u-sec-vend').classList.toggle('hidden', r !== 'vendedor'); $('#u-sec-sup').classList.toggle('hidden', r !== 'supervisor'); };
+    secciones(); $('#u-rol').onchange = secciones;
+    let usuarioTocado = !nuevo;
+    $('#u-usuario').oninput = () => usuarioTocado = true;
+    $('#u-nombre').oninput = () => { if (!usuarioTocado) $('#u-usuario').value = this.generarUsuario($('#u-nombre').value); };
+    $('#u-dis-buscar').oninput = e => { const q = normTxt(e.target.value); $$('#u-sec-vend .caja-lista label').forEach(l => l.classList.toggle('hidden', !!q && !normTxt(l.textContent).includes(q))); };
+    $('#u-form').onsubmit = ev => { ev.preventDefault(); this.guardar(u, nuevo); };
+    setTimeout(() => $('#u-nombre').focus(), 50);
+  },
+  async guardar(orig, nuevo) {
+    const val = id => $(id).value.trim();
+    const marcados = n => $$(`input[name="${n}"]:checked`).map(i => i.value);
+    const u = {...orig, nombre: val('#u-nombre'), usuario: nuevo ? val('#u-usuario').toLowerCase() : orig.usuario, rol: $('#u-rol').value, telefono: val('#u-tel')};
+    if (u.rol === 'vendedor') Object.assign(u, {supervisores: marcados('u-sups'), canales: marcados('u-can'), distritos: marcados('u-dis'), metaDiaria: val('#u-meta')});
+    else Object.assign(u, {supervisores: [], canales: [], distritos: [], metaDiaria: ''});
+    const errs = [];
+    if (u.nombre.length < 3) errs.push('Escribe el nombre completo');
+    if (!/^[a-z0-9._]{3,20}$/.test(u.usuario)) errs.push('El usuario debe tener de 3 a 20 caracteres: minúsculas, números o punto');
+    if (nuevo && this.de(u.usuario)) errs.push('Ese usuario ya existe');
+    if (u.telefono && !/^[0-9 +()-]{6,}$/.test(u.telefono)) errs.push('El celular no parece válido');
+    if (errs.length) { $('#u-error').innerHTML = errs.map(esc).join('<br>'); $('#u-error').classList.remove('hidden'); return; }
+    try {
+      const r = await API.call('adminGuardarUsuario', {datosUsuario: u, nuevo, equipo: u.rol === 'supervisor' ? marcados('u-eq') : null});
+      $('#modal').classList.add('hidden');
+      await this.cargar();
+      if (r.pinTemporal) this.mostrarAcceso(this.de(u.usuario) || u, r.pinTemporal, true);
+      else toast('Cambios guardados ✓');
+    } catch (e) { if (!manejarAuth(e)) { $('#u-error').textContent = e instanceof SinSenal ? 'Sin conexión' : e.message; $('#u-error').classList.remove('hidden'); } }
+  },
+  mostrarAcceso(u, pin, nuevo) {
+    const url = location.origin + location.pathname;
+    const msg = `Hola ${u.nombre.split(' ')[0]}, este es tu acceso a ${CONFIG.NOMBRE_APP}:\n${url}\n\nUsuario: ${u.usuario}\nPIN temporal: ${pin}\n\nAl ingresar, la app te pedirá crear tu propio PIN de 6 números.`;
+    const tel = String(u.telefono || '').replace(/\D/g, '');
+    const wa = 'https://wa.me/' + (tel ? (tel.length === 9 ? '51' + tel : tel) : '') + '?text=' + encodeURIComponent(msg);
+    $('#modal').innerHTML = `<div class="card"><div class="cuerpo">
+      <div style="display:flex;justify-content:space-between;align-items:start"><h2>${nuevo ? 'Usuario creado ✓' : 'Nuevo PIN generado'}</h2><button class="btn-ico" data-cerrar-modal>✕</button></div>
+      <p class="small mut" style="margin:6px 0">Acceso de <b>${esc(u.nombre)}</b> (${ROLES[u.rol]}):</p>
+      <dl class="ficha"><dt>Usuario</dt><dd><b>${esc(u.usuario)}</b></dd><dt>PIN temporal</dt><dd></dd></dl>
+      <div class="pin-grande">${esc(pin)}</div>
+      <div class="aviso amar small">Anótalo o envíalo ahora: por seguridad no se vuelve a mostrar. Al ingresar, la app le pedirá crear su propio PIN.</div>
+      <div class="menu-cta" style="margin-top:12px">
+        <a class="btn prim" style="text-align:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(wa)}">Enviar acceso por WhatsApp${tel ? '' : ' (eliges el contacto)'}</a>
+        <button class="btn sec" id="acc-copiar">Copiar mensaje</button>
+        <button class="btn sec" data-cerrar-modal>Listo</button>
+      </div></div></div>`;
+    $('#modal').classList.remove('hidden');
+    $('#acc-copiar').onclick = async () => { try { await navigator.clipboard.writeText(msg); toast('Mensaje copiado'); } catch { toast('No se pudo copiar', true); } };
+  },
+  async nuevoPin(usuario) {
+    const u = this.de(usuario); if (!u) return;
+    if (!confirm(`Se generará un PIN temporal nuevo para ${u.nombre}. Su PIN actual dejará de funcionar. ¿Continuar?`)) return;
+    try { const r = await API.call('adminRestablecerPin', {objetivo: usuario}); await this.cargar(); this.mostrarAcceso(u, r.pinTemporal, false); }
+    catch (e) { if (!manejarAuth(e)) toast(e.message, true); }
+  },
+  async alternarActivo(usuario) {
+    const u = this.de(usuario); if (!u) return;
+    const vs = this.usuarios.filter(v => (v.supervisores || []).includes(usuario) && v.activo).length;
+    const txt = u.activo ? `¿Desactivar a ${u.nombre}? Ya no podrá ingresar, pero su historial de visitas se conserva.${vs ? `\n\nTiene ${vs} vendedor(es) en su equipo: dejará de verlos.` : ''}` : `¿Activar nuevamente a ${u.nombre}?`;
+    if (!confirm(txt)) return;
+    try { await API.call('adminGuardarUsuario', {datosUsuario: {...u, activo: !u.activo}, nuevo: false, equipo: null}); toast(u.activo ? 'Usuario desactivado' : 'Usuario activado'); await this.cargar(); }
+    catch (e) { if (!manejarAuth(e)) toast(e.message, true); }
+  },
+  pintarListas() {
+    for (const k of ['canales', 'distritos', 'congeladoras', 'motivos']) $('#a-l-' + k).value = Listas[k].join('\n');
+  },
+  async guardarListas() {
+    const listas = {};
+    for (const k of ['canales', 'distritos', 'congeladoras', 'motivos']) {
+      listas[k] = [...new Set($('#a-l-' + k).value.split('\n').map(x => x.trim()).filter(Boolean))];
+      if (!listas[k].length) return toast('Ninguna lista puede quedar vacía', true);
+    }
+    try { await API.call('adminGuardarListas', {listas}); Listas.aplicar(listas); toast('Listas guardadas ✓'); }
+    catch (e) { if (!manejarAuth(e)) toast(e.message, true); }
+  }
+};
+
+/* =====================================================================
+   MODO DEMO: simula el servidor con datos de ejemplo en este navegador
+   ===================================================================== */
+const Demo = {
+  // usuarios iniciales de la demo: Carla (con historial de ejemplo) y Juanjo (desde cero), ambos en el equipo de Tomás y de Arthur
+  usuariosIniciales() {
+    const todo = {canales: [], distritos: [], metaDiaria: '', telefono: '', activo: true, intentos: 0, bloqueadoHasta: '', debeCambiarPin: false};
+    const sups = ['supervisor', 'arthur'];
+    return [
+      {...todo, usuario: 'carla', pinPlano: '1111', nombre: 'Carla Ramos', rol: 'vendedor', supervisores: sups, distritos: ['Lince', 'San Isidro', 'Miraflores', 'Cercado de Lima'], metaDiaria: 12},
+      {...todo, usuario: 'juanjo', pinPlano: '2026', nombre: 'Juanjo Demo', rol: 'vendedor', supervisores: sups, metaDiaria: 10},
+      {...todo, usuario: 'supervisor', pinPlano: '1234', nombre: 'Tomás', rol: 'supervisor'},
+      {...todo, usuario: 'arthur', pinPlano: '2026', nombre: 'Arthur Demo', rol: 'supervisor'},
+      {...todo, usuario: 'admin', pinPlano: '2026', nombre: 'Admin Demo', rol: 'admin'}
+    ];
+  },
+  K_VIS: 'rc_demo2_visitas', K_REV: 'rc_demo2_revisiones', K_USR: 'rc_demo2_usuarios', K_ACT: 'rc_demo2_actividad', K_LIS: 'rc_demo2_listas',
+  leer(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
+  guardar(k, v) { localStorage.setItem(k, JSON.stringify(v)); if (k === this.K_USR) this._lim = null; },
+  usuarios() { let u = this.leer(this.K_USR); if (!u.length) { u = this.usuariosIniciales(); this.guardar(this.K_USR, u); } return u; },
+  async hash(salt, pin) {
+    if (!crypto.subtle) return 'plano:' + salt + pin;
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + pin));
+    return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+  },
+  pinAleatorio() { const a = new Uint32Array(1); crypto.getRandomValues(a); return String(100000 + a[0] % 900000); },
+  async auth(u, p, accion) {
+    const err = (m, auth = true) => { const e = new Error(m); e.servidor = true; e.auth = auth; throw e; };
+    const us = this.usuarios(); const x = us.find(z => z.usuario === String(u || '').trim().toLowerCase());
+    if (!x || !x.activo) err(x ? 'Este usuario está desactivado. Habla con el administrador.' : 'Usuario o PIN incorrecto');
+    if (x.bloqueadoHasta && new Date(x.bloqueadoHasta) > new Date()) err(`Demasiados intentos fallidos. Intenta de nuevo a las ${horaDe(x.bloqueadoHasta)}.`);
+    const ok = x.pinPlano != null ? x.pinPlano === String(p || '').trim() : x.pinHash === await this.hash(x.salt, String(p || '').trim());
+    if (!ok) {
+      x.intentos = (+x.intentos || 0) + 1;
+      if (x.intentos >= 5) { x.bloqueadoHasta = isoLocal(new Date(Date.now() + 15 * 60000)); x.intentos = 0; }
+      this.guardar(this.K_USR, us);
+      err(x.bloqueadoHasta && new Date(x.bloqueadoHasta) > new Date() ? 'Demasiados intentos fallidos: usuario bloqueado 15 minutos.' : 'Usuario o PIN incorrecto');
+    }
+    if (x.intentos || x.bloqueadoHasta) { x.intentos = 0; x.bloqueadoHasta = ''; this.guardar(this.K_USR, us); }
+    const act = this.actividad(); act[x.usuario] = isoLocal(new Date()); this.guardar(this.K_ACT, act);
+    if (x.debeCambiarPin && !['login', 'cambiarPin'].includes(accion)) err('Debes crear tu PIN personal', 'cambiarPin');
+    return {usuario: x.usuario, nombre: x.nombre, rol: x.rol, debeCambiarPin: !!x.debeCambiarPin};
+  },
+  esLimpio(u) { if (!this._lim) this._lim = new Set(this.usuarios().filter(x => x.limpio).map(x => x.usuario)); return this._lim.has(u); },
+  listas() { const l = this.leer(this.K_LIS); return Array.isArray(l) ? null : l; },
+  actividad() { const a = this.leer(this.K_ACT); return Array.isArray(a) ? {} : a; },
+  publico(x) {
+    const act = this.actividad();
+    return {usuario: x.usuario, nombre: x.nombre, rol: x.rol, activo: !!x.activo, supervisores: x.supervisores || [], telefono: x.telefono || '',
+      canales: x.canales || [], distritos: x.distritos || [], metaDiaria: x.metaDiaria || '', ultimaActividad: act[x.usuario] || '',
+      debeCambiarPin: !!x.debeCambiarPin, bloqueado: !!(x.bloqueadoHasta && new Date(x.bloqueadoHasta) > new Date())};
+  },
+  todas(limpio = false) {
+    const propias = this.leer(this.K_VIS).filter(v => this.esLimpio(v.usuario) === limpio);
+    return limpio ? propias : [...this.semilla(), ...propias];
+  },
+  async call(accion, d) {
+    await sleep(200);
+    const s = Sesion.s || {};
+    const user = accion === 'login' ? await this.auth(d.usuario, d.pin, accion) : await this.auth(s.usuario, s.pin, accion);
+    const err = m => { const e = new Error(m); e.servidor = true; throw e; };
+    if (accion === 'login') return {...user, listas: this.listas()};
+    const limpio = this.esLimpio(user.usuario);
+    const us = this.usuarios();
+    if (accion === 'cambiarPin') {
+      const x = us.find(z => z.usuario === user.usuario);
+      if (validarPinNuevo(String(d.pinNuevo), s.pin)) err(validarPinNuevo(String(d.pinNuevo), s.pin));
+      x.salt = Math.random().toString(36).slice(2); x.pinHash = await this.hash(x.salt, String(d.pinNuevo)); delete x.pinPlano; x.debeCambiarPin = false;
+      this.guardar(this.K_USR, us); return true;
+    }
+    if (accion.startsWith('admin')) {
+      if (user.rol !== 'admin') err('Solo para administradores');
+      const delEspacio = us.filter(x => !!x.limpio === limpio);
+      if (accion === 'adminUsuarios') return {usuarios: delEspacio.map(x => this.publico(x)), listas: this.listas()};
+      if (accion === 'adminGuardarListas') { this.guardar(this.K_LIS, d.listas); return true; }
+      const nuevoPin = async x => { const pin = this.pinAleatorio(); x.salt = Math.random().toString(36).slice(2); x.pinHash = await this.hash(x.salt, pin); delete x.pinPlano; x.debeCambiarPin = true; x.intentos = 0; x.bloqueadoHasta = ''; return pin; };
+      if (accion === 'adminRestablecerPin') {
+        const x = delEspacio.find(z => z.usuario === d.objetivo); if (!x) err('No existe ese usuario');
+        const pin = await nuevoPin(x); this.guardar(this.K_USR, us); return {pinTemporal: pin};
+      }
+      if (accion === 'adminGuardarUsuario') {
+        const u = d.datosUsuario;
+        if (!ROLES[u.rol]) err('Rol inválido');
+        let x = us.find(z => z.usuario === u.usuario);
+        if (d.nuevo && x) err('Ese usuario ya existe');
+        if (!d.nuevo && (!x || !!x.limpio !== limpio)) err('No existe ese usuario');
+        if (!d.nuevo && x.usuario === user.usuario && (u.rol !== 'admin' || !u.activo)) err('No puedes quitarte el rol de administrador ni desactivarte a ti mismo');
+        if (!d.nuevo && x.rol === 'admin' && (u.rol !== 'admin' || !u.activo) && delEspacio.filter(z => z.rol === 'admin' && z.activo).length <= 1) err('Debe quedar al menos un administrador activo');
+        if ((u.supervisores || []).some(sv => !delEspacio.some(z => z.usuario === sv && z.rol === 'supervisor'))) err('Uno de los supervisores elegidos no existe');
+        let pin = null;
+        if (d.nuevo) { x = {usuario: u.usuario, limpio, intentos: 0, bloqueadoHasta: '', creado: isoLocal(new Date())}; us.push(x); pin = await nuevoPin(x); }
+        const rolAntes = x.rol;
+        Object.assign(x, {nombre: u.nombre, rol: u.rol, telefono: u.telefono || '', activo: u.activo !== false,
+          supervisores: u.rol === 'vendedor' ? (u.supervisores || []) : [], canales: u.rol === 'vendedor' ? (u.canales || []) : [],
+          distritos: u.rol === 'vendedor' ? (u.distritos || []) : [], metaDiaria: u.rol === 'vendedor' ? (u.metaDiaria || '') : ''});
+        const quitar = v => { v.supervisores = (v.supervisores || []).filter(z => z !== x.usuario); };
+        if (rolAntes === 'supervisor' && (x.rol !== 'supervisor' || !x.activo)) us.forEach(quitar);
+        if (x.rol === 'supervisor' && Array.isArray(d.equipo)) us.forEach(v => {
+          if (v.rol !== 'vendedor' || !!v.limpio !== limpio) return;
+          if (d.equipo.includes(v.usuario)) { if (!(v.supervisores || []).includes(x.usuario)) v.supervisores = [...(v.supervisores || []), x.usuario]; } else quitar(v);
+        });
+        this.guardar(this.K_USR, us);
+        return {usuario: x.usuario, pinTemporal: pin};
+      }
+    }
+    if (accion === 'guardarVisita') {
+      if (user.rol !== 'vendedor') err('Solo los vendedores registran visitas');
+      const v = {...d.visita, usuario: user.usuario, vendedor: user.nombre};
+      const todas = this.todas(limpio);
+      if (todas.some(x => x.id === v.id)) return {id: v.id, repetida: true};
+      const problema = validarVisita(v, construirPuntos(todas, this.leer(this.K_REV)));
+      if (problema) err(problema);
+      v.fotoUrl = d.foto || v.fotoUrl || '';
+      const nuevas = this.leer(this.K_VIS); nuevas.push(v);
+      try { localStorage.setItem(this.K_VIS, JSON.stringify(nuevas)); }
+      catch { err('La memoria de la demo está llena. Usa "Reiniciar datos de la demo".'); }
+      return {id: v.id, fotoUrl: v.fotoUrl};
+    }
+    if (accion === 'vendedorDatos') {
+      const todas = this.todas(limpio); const pts = construirPuntos(todas, this.leer(this.K_REV));
+      const desde = sumarDias(hoyISO(), -60);
+      const yo = us.find(z => z.usuario === user.usuario);
+      return {
+        perfil: {canales: yo.canales || [], distritos: yo.distritos || [], metaDiaria: yo.metaDiaria || ''}, listas: this.listas(),
+        puntos: [...pts.values()].filter(p => !p.anulado).map(p => ({id: p.id, negocio: p.base.negocio, direccion: p.base.direccion, tipoPunto: p.base.tipoPunto, distrito: p.base.distrito,
+          lat: p.base.lat, lng: p.base.lng, estado: p.estado, fotoUrl: p.base.fotoUrl, usuario: p.base.usuario, vendedor: p.base.vendedor, fecha: p.base.fecha, fechaHora: p.base.fechaHora,
+          tipoVia: p.base.tipoVia, contacto: p.base.contacto, cargo: p.base.cargo, telefono: p.base.telefono, congeladora: p.ultima.congeladora || p.base.congeladora})),
+        mias: todas.filter(v => v.usuario === user.usuario && v.fecha >= desde)
+      };
+    }
+    if (accion === 'supervisorDatos') {
+      if (!['supervisor', 'admin'].includes(user.rol)) err('Solo para supervisores');
+      const vends = us.filter(u => u.rol === 'vendedor' && !!u.limpio === limpio && u.activo && (user.rol === 'admin' || (u.supervisores || []).includes(user.usuario)));
+      const set = new Set(vends.map(v => v.usuario));
+      return {visitas: this.todas(limpio).filter(v => set.has(v.usuario)), revisiones: this.leer(this.K_REV), listas: this.listas(),
+        vendedores: vends.map(v => this.publico(v))};
+    }
+    if (accion === 'revisarPar') {
+      if (!['supervisor', 'admin'].includes(user.rol)) err('Solo para supervisores');
+      const r = this.leer(this.K_REV);
+      r.push({idA: d.idA, idB: d.idB, decision: d.decision, fecha: isoLocal(new Date()), usuario: user.usuario});
+      localStorage.setItem(this.K_REV, JSON.stringify(r));
+      return true;
+    }
+    err('Acción desconocida');
+  },
+  reiniciar() { for (const k of [this.K_VIS, this.K_REV, this.K_USR, this.K_ACT, this.K_LIS, 'rc_listas']) localStorage.removeItem(k); this._semilla = null; this._lim = null; },
+  // cada día cambian los datos de ejemplo: se borra lo hecho sobre las tiendas de ejemplo, pero se conserva todo lo demás
+  reiniciarDia() {
+    localStorage.setItem(this.K_VIS, JSON.stringify(this.leer(this.K_VIS).filter(v => !String(v.puntoId).startsWith('demo'))));
+    localStorage.setItem(this.K_REV, JSON.stringify(this.leer(this.K_REV).filter(r => !String(r.idA).startsWith('demo') && !String(r.idB).startsWith('demo'))));
+    this._semilla = null;
+  },
+
+  // ---------- datos de ejemplo (se regeneran igual cada día) ----------
+  _semilla: null,
+  semilla() {
+    const hoy = hoyISO(); const ahora = new Date();
+    if (this._semilla && this._semilla.hoy === hoy) return this._semilla.v.filter(z => z.fechaHora <= isoLocal(ahora));
+    let x = [...hoy].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+    const rnd = () => { x = (x + 0x6D2B79F5) >>> 0; let t = x; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const pick = a => a[Math.floor(rnd() * a.length)];
+    const NOMBRES = ['Don Lucho', 'Rosita', 'El Chino', 'San José', 'Mi Esperanza', 'Doña Carmen', 'Los Andes', 'La Económica', 'Santa Rosa', 'El Sol', 'Victoria', 'Don Pepe', 'La Bendición', 'Los Primos', 'Señor de Luren', 'El Paisa', 'Don Mario', 'La Esquina', 'Lucerito', 'El Ahorro', 'Doña Juana', 'Las Flores', 'Mi Barrio', 'San Martín', 'Virgen de la Puerta', 'El Buen Precio', 'Don Beto', 'Kathy', 'Los Ángeles', 'Rey David', 'La Familia', 'Dos Hermanos', 'El Triunfo', 'Sarita', 'Don Felipe', 'Corazón de Jesús', 'La Fortuna', 'Mamá Rosa', 'El Porvenir', 'Don Chema'];
+    const TIPOS = ['Bodega', 'Bodega', 'Minimarket', 'Market', 'Tienda', 'Abarrotes'];
+    const CONTACTOS = ['Rosa', 'Luis', 'Carmen', 'Pedro', 'Juana', 'Mario', 'Ana', 'José', 'Lucía', 'Víctor', ''];
+    const CALLES = [
+      {usuario: 'carla', vendedor: 'Carla Ramos', via: 'Av. Arequipa', dl: 0, tipoVia: 'Avenida'},
+    ];
+    const lngEje = lat => -77.0372 + (lat + 12.060) / (-0.059) * (0.0076);
+        NOMBRES.push('Quispe', 'Huamán', 'Mamani', 'Chávez', 'Rojas', 'Vargas', 'Castillo', 'Mendoza', 'Gutiérrez', 'Salazar', 'Paredes', 'Espinoza', 'Ccori', 'Inti', 'Mi Perú', 'Nueva Era', 'El Encanto', 'Doña Pocha', 'Don Teo', 'Belén', 'San Judas', 'La Estrella', 'El Rápido', 'Don Lalo', 'La Única');
+    // evita que los datos de ejemplo creen duplicados "falsos": nombre distinto a las tiendas cercanas
+    const nombre = (lat, lng) => {
+      let n, k = 0;
+      do { n = pick(TIPOS) + ' ' + pick(NOMBRES); }
+      while (k++ < 60 && vs.some(v => v.tipo === 'nueva' && Math.abs(v.lat - lat) < 0.0006 && Math.abs(v.lng - lng) < 0.0006 && similitudNombres(v.negocio, n) >= 0.5));
+      return n;
+    };
+    const vs = []; const pendientes = {carla: []};
+    let idn = 0; const nid = () => 'demo' + (++idn);
+    const nueva = (c, fecha, min, lat, lng, extra = {}) => {
+      const id = nid(); const neg = extra.negocio || nombre(lat, lng);
+      const r = rnd(); const resultado = extra.resultado || (r < .22 ? 'visita' : r < .55 ? 'prospecto' : 'cierre');
+      const v = {id, puntoId: id, tipo: 'nueva', fecha, fechaHora: `${fecha}T${pad(Math.floor(min / 60))}:${pad(min % 60)}:00`,
+        usuario: c.usuario, vendedor: c.vendedor, negocio: neg,
+        direccion: `${c.via} ${Math.round(900 + (-12.060 - lat) / 0.059 * 4200 / 2) * 2 + (lng < lngEje(lat) + c.dl ? 1 : 0)}`,
+        tipoVia: c.tipoVia, contacto: pick(CONTACTOS), cargo: pick(CONFIG.CARGOS), telefono: rnd() < .35 ? '9' + Math.floor(10000000 + rnd() * 89999999) : '',
+        congeladora: resultado === 'visita' ? pick(CONFIG.CONGELADORAS) : pick(CONFIG.CONGELADORAS.slice(0, -1)),
+        resultado, motivo: resultado === 'prospecto' ? pick(CONFIG.MOTIVOS.slice(0, -1)) : '', observaciones: '',
+        tipoPunto: rnd() < .7 ? CONFIG.CANALES[0] : pick(CONFIG.CANALES.slice(1)),
+        distrito: lat > -12.071 ? 'Cercado de Lima' : lat > -12.087 ? 'Lince' : lat > -12.101 ? 'San Isidro' : 'Miraflores',
+        lat: +lat.toFixed(6), lng: +lng.toFixed(6), precision: 5 + Math.floor(rnd() * 20), ...extra};
+      v.fotoUrl = this.fachada(neg, idn);
+      vs.push(v); if (resultado === 'prospecto') pendientes[c.usuario].push(v);
+      return v;
+    };
+    for (let d = 6; d >= 0; d--) {
+      const fecha = sumarDias(hoy, -d);
+      if (new Date(fecha + 'T12:00:00').getDay() === 0) continue; // domingo libre
+      CALLES.forEach(c => {
+        // revisitas de prospectos de días anteriores
+        const prev = pendientes[c.usuario].filter(p => p.fecha < fecha);
+        const revisitas = prev.filter(() => rnd() < .35).slice(0, 2);
+        const n = 7 + Math.floor(rnd() * 6);
+        let lat = -12.068 - rnd() * 0.034; let min = 9 * 60 + Math.floor(rnd() * 30);
+        const huecos = revisitas.map(() => Math.floor(rnd() * n));
+        for (let k = 0; k < n; k++) {
+          min += 18 + Math.floor(rnd() * 22);
+          const ri = huecos.indexOf(k);
+          if (ri >= 0) {
+            const p = revisitas[ri]; const rr = rnd(); const cierra = rr < .55; const pierde = !cierra && rr < .7;
+            const id = nid();
+            vs.push({...p, id, tipo: 'revisita', puntoId: p.id, fecha, fechaHora: `${fecha}T${pad(Math.floor(min / 60))}:${pad(min % 60)}:00`,
+              resultado: cierra ? 'cierre' : pierde ? 'visita' : 'prospecto', motivo: cierra ? '' : pick(CONFIG.MOTIVOS.slice(0, -1)),
+              lat: +(p.lat + 0.00003).toFixed(6), precision: 6 + Math.floor(rnd() * 12), fotoUrl: this.fachada(p.negocio, idn)});
+            pendientes[c.usuario] = pendientes[c.usuario].filter(z => z !== p);
+            if (!cierra && !pierde) pendientes[c.usuario].push({...p, fecha});
+            min += 15;
+          }
+          lat -= 0.00045 + rnd() * 0.0004;
+          const lado = rnd() < .5 ? -1 : 1;
+          nueva(c, fecha, min, lat, lngEje(lat) + c.dl + lado * 0.00012);
+          // a veces la tienda de al lado (colindante, nombre distinto): NO es duplicado
+          if (rnd() < .12) { min += 10; nueva(c, fecha, min, lat - 0.00008, lngEje(lat) + c.dl + lado * 0.00012); }
+        }
+      });
+    }
+    // un duplicado a propósito: Carla vuelve a registrar como "nueva" una tienda que ya tenía
+    const base = vs.find(v => v.usuario === 'carla' && v.tipo === 'nueva' && v.fecha < hoy);
+    if (base) {
+      const id = nid(); const fecha = sumarDias(hoy, -1) > base.fecha ? sumarDias(hoy, -1) : hoy;
+      const neg = base.negocio.startsWith('Bodega ') ? base.negocio.replace('Bodega ', 'Minimarket ') : base.negocio.replace(/^\S+ /, 'Bodega ');
+      vs.push({...base, id, puntoId: id, fecha, fechaHora: `${fecha}T17:40:00`, usuario: 'carla', vendedor: 'Carla Ramos',
+        negocio: neg === base.negocio ? base.negocio + ' 2' : neg, lat: +(base.lat + 0.00006).toFixed(6), lng: +(base.lng - 0.00004).toFixed(6),
+        resultado: 'cierre', motivo: '', contacto: base.contacto || 'Rosa', fotoUrl: base.fotoUrl});
+    }
+    this._semilla = {hoy, v: vs};
+    return vs.filter(z => z.fechaHora <= isoLocal(ahora));
+  },
+  fachada(nombre, n) {
+    const tonos = ['#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#db2777'];
+    const c = tonos[[...nombre].reduce((a, ch) => a + ch.charCodeAt(0), 0) % tonos.length];
+    const pared = ['#fde68a', '#e5e7eb', '#fecaca', '#bfdbfe', '#d9f99d', '#fbcfe8'][n % 6];
+    const rayas = Array.from({length: 10}, (_, i) => `<rect x="${i * 32}" y="70" width="16" height="34" fill="${i % 2 ? '#fff' : c}"/>`).join('');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="220" viewBox="0 0 320 220">
+      <rect width="320" height="220" fill="#93c5fd"/><rect y="20" width="320" height="200" fill="${pared}"/>
+      <rect x="20" y="30" width="280" height="36" rx="4" fill="#fff" stroke="${c}" stroke-width="3"/>
+      <text x="160" y="55" font-family="Arial,sans-serif" font-size="${Math.min(20, 520 / nombre.length)}" font-weight="700" text-anchor="middle" fill="${c}">${esc(nombre.toUpperCase())}</text>
+      <rect x="0" y="70" width="320" height="34" fill="${c}"/>${rayas}
+      <rect x="30" y="118" width="110" height="102" fill="#1f2937"/><rect x="38" y="126" width="94" height="94" fill="#374151"/>
+      <rect x="160" y="118" width="130" height="70" fill="#bae6fd" stroke="#475569" stroke-width="4"/>
+      <rect x="168" y="150" width="40" height="30" fill="#f87171"/><rect x="214" y="140" width="30" height="40" fill="#facc15"/><rect x="250" y="155" width="32" height="25" fill="#34d399"/>
+      <rect y="212" width="320" height="8" fill="#9ca3af"/></svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+};
+
+/* =====================================================================
+   NAVEGACIÓN / EVENTOS
+   ===================================================================== */
+function mostrar(vista) {
+  ['login', 'vend', 'sup', 'adm', 'pinscreen'].forEach(v => $('#' + v).classList.toggle('hidden', v !== vista));
+}
+async function entrar(usuario, pin) {
+  try {
+    const u = await API.call('login', {usuario: String(usuario).trim().toLowerCase(), pin: String(pin).trim()});
+    Listas.aplicar(u.listas);
+    Sesion.guardar({usuario: u.usuario, nombre: u.nombre, rol: u.rol, debeCambiarPin: !!u.debeCambiarPin, pin: String(pin).trim()});
+    $('#login-form').reset();
+    arrancar();
+  } catch (e) { toast(e instanceof SinSenal ? 'Necesitas conexión para ingresar la primera vez.' : e.message, true); }
+}
+function arrancar() {
+  const s = Sesion.s;
+  if (!s) return mostrar('login');
+  if (s.debeCambiarPin) return PinScreen.abrir(true);
+  if (s.rol === 'admin') { mostrar('adm'); Admin.iniciar(); }
+  else if (s.rol === 'supervisor') { mostrar('sup'); Supervisor.iniciar(); }
+  else { mostrar('vend'); Vendedor.iniciar(); }
+}
+function salir() {
+  Supervisor.detener(); Sesion.cerrar(); $('#modal').classList.add('hidden'); mostrar('login');
+  Vendedor.miPos = null; $('[data-vt="hoy"]').click();
+  Object.assign(Supervisor, {tab: 'todos', dia: null, fCanal: '', fDistrito: '', claveEncuadre: ''});
+  $('#s-f-canal').value = ''; $('#s-f-distrito').value = '';
+}
+
+function init() {
+  document.documentElement.style.setProperty('--c', CONFIG.COLOR);
+  if (CONFIG.COLOR_SUAVE) document.documentElement.style.setProperty('--c-suave', CONFIG.COLOR_SUAVE);
+  if (CONFIG.FUENTE) {
+    const l = document.createElement('link'); l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=' + CONFIG.FUENTE.trim().replace(/ /g, '+') + ':wght@400;600;700&display=swap';
+    document.head.appendChild(l);
+    document.body.style.fontFamily = `'${CONFIG.FUENTE}', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  }
+  $('meta[name=theme-color]').content = CONFIG.COLOR;
+  document.title = CONFIG.NOMBRE_APP;
+  $$('.js-nombre-app').forEach(e => e.textContent = CONFIG.NOMBRE_APP);
+  $$('.js-empresa').forEach(e => e.textContent = CONFIG.EMPRESA);
+  if (CONFIG.LOGO) { $('#login .logo').outerHTML = `<img class="logo-img" src="${CONFIG.LOGO}" alt="${esc(CONFIG.NOMBRE_APP)}">`; $('#login h2').classList.add('hidden'); }
+  if (CONFIG.LOGO_BLANCO) $$('.top .tit b.js-nombre-app').forEach(b => b.outerHTML = `<img class="top-logo" src="${CONFIG.LOGO_BLANCO}" alt="${esc(CONFIG.NOMBRE_APP)}">`);
+  if (API.demo && localStorage.getItem('rc_demo_dia') !== hoyISO()) { Demo.reiniciarDia(); localStorage.setItem('rc_demo_dia', hoyISO()); }
+  if (API.demo) { $('#login-demo').classList.remove('hidden'); $$('.js-demo').forEach(e => e.classList.remove('hidden')); }
+  Listas.cargar(); poblarSelects();
+
+  $('#login-form').addEventListener('submit', e => { e.preventDefault(); entrar($('#l-usuario').value, $('#l-pin').value); });
+  $$('#login-demo [data-u]').forEach(b => b.addEventListener('click', () => entrar(b.dataset.u, b.dataset.p)));
+  $('#demo-reset').addEventListener('click', async () => {
+    if (!confirm('Se borrarán las visitas, usuarios y listas que creaste en la demo. ¿Continuar?')) return;
+    Demo.reiniciar();
+    const db = await Cola.abrir();
+    for (const st of ['cola', 'rechazadas']) db.transaction(st, 'readwrite').objectStore(st).clear();
+    toast('Demo reiniciada');
+  });
+
+  // vendedor
+  $('#v-menu').addEventListener('click', abrirMenuCuenta);
+  $('#v-offline').addEventListener('change', e => {
+    App.simOffline = e.target.checked;
+    toast(App.simOffline ? 'Simulando sin señal: las visitas quedarán pendientes' : 'Señal recuperada');
+    if (!App.simOffline) sincronizar();
+  });
+  $$('[data-vt]').forEach(b => b.addEventListener('click', () => {
+    Vendedor.tab = b.dataset.vt;
+    $$('[data-vt]').forEach(x => x.classList.toggle('on', x === b));
+    $('#vt-hoy').classList.toggle('hidden', b.dataset.vt !== 'hoy');
+    $('#vt-hist').classList.toggle('hidden', b.dataset.vt !== 'hist');
+    if (b.dataset.vt === 'hoy' && Vendedor.mapa) setTimeout(() => Vendedor.mapa.invalidateSize(), 50);
+    if (b.dataset.vt !== 'hoy') { Vendedor.renderTiendas('hist'); Vendedor.ubicar(); }
+  }));
+  $('#v-nueva').addEventListener('click', () => Form.abrir('nueva'));
+  $('#v-hist-buscar').addEventListener('input', () => Vendedor.renderTiendas('hist'));
+  $('#vend').addEventListener('click', async e => {
+    if (e.target.closest('[data-ubic]')) return Vendedor.ubicar(true);
+    if (e.target.closest('[data-ubic-sim]')) return Vendedor.simularUbic();
+    const hf = e.target.closest('[data-hf]');
+    if (hf) { Vendedor.filtroHist = hf.dataset.hf; $$('[data-hf]').forEach(x => x.classList.toggle('on', x === hf)); return Vendedor.renderTiendas('hist'); }
+    const fo = e.target.closest('[data-foco]');
+    if (fo && !e.target.closest('button, a')) return Vendedor.enfocar(fo.dataset.foco, fo.dataset.cual);
+    const rq = e.target.closest('[data-rapido]');
+    if (rq) { const p = Vendedor.puntosLocales().find(x => x.id === rq.dataset.rapido); if (p) Rapido.abrir(p, rq.dataset.res); return; }
+    const r = e.target.closest('[data-revisitar]');
+    if (r) { const p = Vendedor.puntosLocales().find(x => x.id === r.dataset.revisitar); if (p) Form.abrir('revisita', p, r.dataset.res || null); }
+    const d = e.target.closest('[data-desc]');
+    if (d) { await Cola.quitar(d.dataset.desc, 'rechazadas'); Vendedor.render(); }
+  });
+
+  // formulario
+  $('#f-cerrar').addEventListener('click', () => { if (!Form.foto || confirm('¿Salir sin guardar esta visita?')) Form.cerrar(); });
+  $('#f-gps-retry').addEventListener('click', () => Form.capturarGPS());
+  $$('.js-demo-gps').forEach(b => b.addEventListener('click', () => Form.simularGPS(b.dataset.sim)));
+  $('#f-es-otra').addEventListener('click', () => Form.mostrarFicha());
+  $('#f-cerca-lista').addEventListener('click', e => {
+    const b = e.target.closest('[data-cerca-rapido]'); if (!b) return;
+    const p = Vendedor.puntosLocales().find(x => x.id === b.dataset.cercaRapido); const gps = Form.gps;
+    Form.cerrar(); if (p) Rapido.abrir(p, b.dataset.res, gps);
+  });
+  $('#f-ficha').addEventListener('submit', e => Form.guardar(e));
+
+  // supervisor
+  $('#s-salir').addEventListener('click', abrirMenuCuenta);
+  $('#s-admin').addEventListener('click', () => { Supervisor.detener(); mostrar('adm'); Admin.iniciar(); });
+  ['#s-f-canal', '#s-f-distrito'].forEach(id => $(id).addEventListener('change', () => {
+    Supervisor.fCanal = $('#s-f-canal').value; Supervisor.fDistrito = $('#s-f-distrito').value; Supervisor.render();
+  }));
+
+  // pin y administrador
+  $('#pin-form').addEventListener('submit', e => PinScreen.guardar(e));
+  $('#pin-cancelar').addEventListener('click', () => arrancar());
+  $('#a-menu').addEventListener('click', abrirMenuCuenta);
+  $('#a-seguimiento').addEventListener('click', () => { mostrar('sup'); Supervisor.iniciar(); });
+  $('#a-nuevo').addEventListener('click', () => Admin.formulario(null));
+  ['#a-f-rol', '#a-f-inact'].forEach(id => $(id).addEventListener('change', () => Admin.render()));
+  $('#a-buscar').addEventListener('input', () => Admin.render());
+  $$('[data-at]').forEach(b => b.addEventListener('click', () => {
+    $$('[data-at]').forEach(x => x.classList.toggle('on', x === b));
+    $('#at-usuarios').classList.toggle('hidden', b.dataset.at !== 'usuarios');
+    $('#at-listas').classList.toggle('hidden', b.dataset.at !== 'listas');
+    if (b.dataset.at === 'listas') Admin.pintarListas();
+  }));
+  $('#a-l-guardar').addEventListener('click', () => Admin.guardarListas());
+  $('#adm').addEventListener('click', e => {
+    const ed = e.target.closest('[data-a-editar]'); if (ed) return Admin.formulario(Admin.de(ed.dataset.aEditar));
+    const pn = e.target.closest('[data-a-pin]'); if (pn) return Admin.nuevoPin(pn.dataset.aPin);
+    const ac = e.target.closest('[data-a-activo]'); if (ac) return Admin.alternarActivo(ac.dataset.aActivo);
+  });
+  $('#s-refrescar').addEventListener('click', () => Supervisor.cargar());
+  $$('[data-rango]').forEach(b => b.addEventListener('click', () => Supervisor.setRango(b.dataset.rango)));
+  ['#s-desde', '#s-hasta'].forEach(id => $(id).addEventListener('change', () => {
+    let d = $('#s-desde').value, h = $('#s-hasta').value;
+    if (!d || !h) return;
+    if (d > h) [d, h] = [h, d];
+    Object.assign(Supervisor, {desde: d, hasta: h, dia: null});
+    $$('[data-rango]').forEach(b => b.classList.remove('on'));
+    Supervisor.render();
+  }));
+  $('#s-ruta').addEventListener('change', () => Supervisor.render(true));
+  $('#s-csv').addEventListener('click', () => Supervisor.exportarCSV());
+  $('#sup').addEventListener('click', e => {
+    const t = e.target.closest('[data-st]');
+    if (t) { Supervisor.tab = t.dataset.st; Supervisor.dia = null; Supervisor.render(); if (Supervisor.mapa) setTimeout(() => Supervisor.mapa.invalidateSize(), 50); return; }
+    const dia = e.target.closest('[data-dia]');
+    if (dia) { Supervisor.dia = dia.dataset.dia || null; Supervisor.render(); return; }
+    const it = e.target.closest('[data-vid]');
+    if (it) { const v = Supervisor.datos.visitas.find(x => x.id === it.dataset.vid); if (v) Supervisor.detalle(v); return; }
+    const par = e.target.closest('[data-par]');
+    if (par) { const [a, b, dec] = par.dataset.par.split('|'); Supervisor.revisarPar(a, b, dec); }
+  });
+  $('#modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.closest('[data-cerrar-modal]')) $('#modal').classList.add('hidden'); });
+
+  Sesion.cargar();
+  arrancar();
+}
+init();
+</script>
+</body>
+</html>
