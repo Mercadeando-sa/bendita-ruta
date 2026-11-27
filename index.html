@@ -347,28 +347,21 @@ table.usr tr.inact td{opacity:.5}
       <div class="kpi k-cie"><b id="v-k-cie">0</b><span>Cierres</span></div>
     </div>
     <div class="tabs" style="margin:14px 0 10px">
-      <button data-vt="hoy" class="on">Hoy</button>
-      <button data-vt="pros">Prospectos <span id="v-n-pros"></span></button>
-      <button data-vt="hist">Mis tiendas</button>
+      <button data-vt="hoy" class="on">Mi ruta de hoy</button>
+      <button data-vt="hist">Mis tiendas <span id="v-n-pros"></span></button>
     </div>
     <div id="vt-hoy">
       <div id="v-mapa" class="mapa"></div>
       <div id="v-lista-hoy" class="lista" style="margin-top:10px"></div>
     </div>
-    <div id="vt-pros" class="hidden">
-      <p class="small mut" style="margin:0 0 8px">Tiendas a las que les interesó y aún no cierran, de la más cercana a la más lejana. Desde aquí las pasas a <b>cerrada</b> o a <b>ya no le interesa</b> (tienes que estar en la tienda).</p>
-      <div class="ubic js-ubic"></div>
-      <div id="v-mapa-pros" class="mapa chico"></div>
-      <div id="v-lista-pros" class="lista"></div>
-    </div>
     <div id="vt-hist" class="hidden">
-      <p class="small mut" style="margin:0 0 8px">Todas las tiendas que has visitado y en qué quedó cada una.</p>
       <div class="chips-filtro" id="v-hist-filtro">
-        <button data-hf="" class="on">Todas</button>
-        <button data-hf="prospecto">Prospectos</button>
+        <button data-hf="prospecto" class="on">Prospectos</button>
         <button data-hf="cierre">Cerradas</button>
         <button data-hf="visita">Sin interés</button>
+        <button data-hf="">Todas</button>
       </div>
+      <p class="small mut" style="margin:0 0 8px" id="v-hist-ayuda"></p>
       <input id="v-hist-buscar" placeholder="Buscar por nombre o dirección…" style="margin-bottom:8px;padding:10px">
       <div class="ubic js-ubic"></div>
       <div id="v-mapa-hist" class="mapa chico"></div>
@@ -917,14 +910,15 @@ const Vendedor = {
     for (const it of this.pend) {
       const v = it.visita;
       if (v.tipo === 'nueva') mapa.set(v.id, {id: v.id, negocio: v.negocio, direccion: v.direccion, tipoPunto: v.tipoPunto, distrito: v.distrito, lat: v.lat, lng: v.lng,
-        estado: v.resultado, fotoUrl: it.foto, usuario: v.usuario, vendedor: v.vendedor, fecha: v.fecha, fechaHora: v.fechaHora, pendiente: true});
+        tipoVia: v.tipoVia, contacto: v.contacto, cargo: v.cargo, telefono: v.telefono, congeladora: v.congeladora,
+        estado: v.resultado, fotoUrl: it.foto || v.fotoUrl, usuario: v.usuario, vendedor: v.vendedor, fecha: v.fecha, fechaHora: v.fechaHora, pendiente: true});
       else if (mapa.has(v.puntoId)) mapa.get(v.puntoId).estado = v.resultado;
     }
     return [...mapa.values()];
   },
   misVisitas() {
     const ids = new Set(this.datos.mias.map(v => v.id));
-    return [...this.datos.mias, ...this.pend.filter(it => !ids.has(it.id)).map(it => ({...it.visita, fotoUrl: it.foto, pendiente: true}))];
+    return [...this.datos.mias, ...this.pend.filter(it => !ids.has(it.id)).map(it => ({...it.visita, fotoUrl: it.foto || it.visita.fotoUrl, pendiente: true}))];
   },
   async render() {
     if (Sesion.s?.rol !== 'vendedor') return;
@@ -961,12 +955,11 @@ const Vendedor = {
     const pros = this.misTiendas().filter(p => p.estado === 'prospecto');
     $('#v-n-pros').textContent = pros.length ? `(${pros.length})` : '';
     this.pintarUbic();
-    if (this.tab === 'pros') this.renderTiendas('pros');
     if (this.tab === 'hist') this.renderTiendas('hist');
   },
 
   // ---------- Mis prospectos / Mis tiendas ----------
-  miPos: null, buscandoPos: false, filtroHist: '', mapas: {}, capas: {},
+  miPos: null, buscandoPos: false, filtroHist: 'prospecto', mapas: {}, capas: {},
   // tiendas registradas por mí o donde hice alguna visita, con su estado actual y su historial
   misTiendas() {
     const yo = Sesion.s.usuario, mias = this.misVisitas();
@@ -1016,6 +1009,12 @@ const Vendedor = {
   },
   renderTiendas(cual) {
     let lista = this.misTiendas();
+    const todas = lista;
+    const n = e => todas.filter(p => p.estado === e).length;
+    $$('#v-hist-filtro [data-hf]').forEach(b => { const e = b.dataset.hf; b.textContent = {prospecto: 'Prospectos', cierre: 'Cerradas', visita: 'Sin interés', '': 'Todas'}[e] + ` (${e ? n(e) : todas.length})`; });
+    $('#v-hist-ayuda').innerHTML = this.filtroHist === 'prospecto'
+      ? 'Tiendas a las que les interesó y aún no cierran, de la más cercana a la más lejana. Cuando estés en la tienda, toca <b>Cerrar venta</b> o <b>Ya no le interesa</b>.'
+      : 'Tiendas que has visitado y en qué quedó cada una.';
     if (cual === 'pros') lista = lista.filter(p => p.estado === 'prospecto');
     else {
       if (this.filtroHist) lista = lista.filter(p => p.estado === this.filtroHist);
@@ -1035,12 +1034,12 @@ const Vendedor = {
           <small>${p.d != null ? '<strong style="color:var(--tx)">' + dist(p.d) + '</strong> · ' : ''}Última visita ${esc(fechaCorta(p.ultima.slice(0, 10)))}${p.nVisitas > 1 ? ` · ${p.nVisitas} visitas` : ''}</small>
           <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap"><span class="chip ${p.estado}">${etiqueta[p.estado]}</span>${p.tipoPunto ? `<span class="chip visita">${esc(p.tipoPunto)}</span>` : ''}${p.pendiente ? '<span class="chip pend">Pendiente de subir</span>' : ''}</div>
           <div class="acc-v">
-            ${p.estado === 'prospecto' ? `<button class="btn prim" data-revisitar="${esc(p.id)}" data-res="cierre" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>✓ Cerrar venta</button>
-              <button class="btn peligro" data-revisitar="${esc(p.id)}" data-res="visita" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>✕ Ya no le interesa</button>` : ''}
+            ${p.estado === 'prospecto' ? `<button class="btn prim" data-rapido="${esc(p.id)}" data-res="cierre" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>✓ Cerrar venta</button>
+              <button class="btn peligro" data-rapido="${esc(p.id)}" data-res="visita" ${p.pendiente ? 'disabled title="Primero debe subirse"' : ''}>✕ Ya no le interesa</button>` : ''}
             <a class="btn sec" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}">Cómo llegar ↗</a>
           </div></div>
       </div>`).join('')
-      : `<div class="vacio">${cual === 'pros' ? 'No tienes prospectos pendientes. 🎉' : 'No hay tiendas con ese filtro.'}</div>`;
+      : `<div class="vacio">${cual === 'pros' ? 'No tienes prospectos pendientes. 🎉' : (this.filtroHist === 'prospecto' ? 'No tienes prospectos pendientes. 🎉' : 'No hay tiendas con ese filtro.')}</div>`;
     // mapa
     const elMapa = $(cual === 'pros' ? '#v-mapa-pros' : '#v-mapa-hist');
     if (!this.mapas[cual]) { this.mapas[cual] = Mapas.crear(elMapa); if (this.mapas[cual]) this.capas[cual] = L.layerGroup().addTo(this.mapas[cual]); }
@@ -1232,7 +1231,7 @@ const Form = {
     if (!cerca.length) return this.mostrarFicha();
     $('#f-cerca-lista').innerHTML = cerca.map(p => {
       let acc;
-      if (p.estado === 'prospecto' && !p.pendiente) acc = `<button class="btn prim" type="button" data-es-esta="${esc(p.id)}" style="padding:10px;font-size:13px">Es esta<br>(revisitar)</button>`;
+      if (p.estado === 'prospecto' && !p.pendiente) acc = `<div style="display:flex;flex-direction:column;gap:6px"><button class="btn prim" type="button" data-cerca-rapido="${esc(p.id)}" data-res="cierre" style="padding:8px 10px;font-size:12.5px">✓ Es esta:<br>cerrar venta</button><button class="btn peligro" type="button" data-cerca-rapido="${esc(p.id)}" data-res="visita" style="padding:8px 10px;font-size:12.5px">✕ Es esta: ya<br>no le interesa</button></div>`;
       else if (p.estado === 'prospecto') acc = '<span class="small mut">Pendiente de subir</span>';
       else acc = `<span class="small mut" style="text-align:right">Ya registrada<br>(${p.estado === 'cierre' ? 'cerrada' : 'no le interesó'})</span>`;
       return `<div class="cerca-op">${imgFoto(p.fotoUrl)}
@@ -1318,6 +1317,95 @@ const Form = {
       sincronizar();
     } catch (e) { toast('No se pudo guardar en el celular: ' + e.message, true); }
     finally { $('#f-guardar').disabled = false; }
+  }
+};
+
+/* =====================================================================
+   ACCIÓN RÁPIDA SOBRE UN PROSPECTO: cerrar venta / ya no le interesa
+   Usa los datos y la foto que ya existen de la tienda; solo verifica con el GPS
+   que el vendedor esté en el lugar.
+   ===================================================================== */
+const Rapido = {
+  p: null, res: null, gps: null, watch: null, timer: null,
+  abrir(p, res, gps = null) {
+    Object.assign(this, {p, res, gps: null});
+    const cierre = res === 'cierre';
+    const opts = (arr, sel, ph) => `<option value="">${ph}</option>` + arr.map(x => `<option ${x === sel ? 'selected' : ''}>${esc(x)}</option>`).join('');
+    $('#modal').innerHTML = `<div class="card"><div class="cuerpo">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><h2>${cierre ? '✓ Cerrar venta' : '✕ Ya no le interesa'}</h2><button class="btn-ico" data-rapido-cerrar>✕</button></div>
+      <div class="cerca-op" style="margin-top:10px">${imgFoto(p.fotoUrl)}
+        <div class="tx"><b>${esc(p.negocio)}</b><div class="small mut">${esc(p.direccion)}${p.distrito ? ' · ' + esc(p.distrito) : ''}</div>
+        ${p.contacto ? `<div class="small mut">Contacto: ${esc(p.contacto)}${p.cargo ? ' (' + esc(p.cargo) + ')' : ''}</div>` : ''}</div></div>
+      <div class="gps busca" id="r-gps" style="margin:4px 0 2px"><span class="ico">📡</span><span id="r-gps-txt">Verificando que estés en la tienda…</span></div>
+      <div class="small mut" id="r-gps-sub">Se usan los datos y la foto que ya tienes de esta tienda. No tienes que volver a llenarlos.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn sec hidden" id="r-reintentar" type="button">↻ Volver a intentar</button>
+        ${API.demo ? '<button class="btn sec" id="r-simular" type="button">Simular estar en la tienda (demo)</button>' : ''}
+      </div>
+      <details style="margin-top:10px"><summary class="small" style="cursor:pointer;font-weight:600">${cierre ? 'Congeladora instalada' : 'Motivo'} y nota (opcional)</summary>
+        ${cierre ? `<label class="f" for="r-cong">Congeladora instalada</label><select id="r-cong">${opts(Listas.congeladoras, p.congeladora, 'Sin especificar')}</select>`
+                 : `<label class="f" for="r-motivo">¿Por qué ya no le interesa?</label><select id="r-motivo">${opts(Listas.motivos, '', 'Sin especificar')}</select>`}
+        <label class="f" for="r-obs">Nota</label><input id="r-obs" placeholder="${cierre ? 'Ej.: se instala el lunes' : 'Ej.: ya trabaja con otra marca'}">
+      </details>
+      <button class="btn ${cierre ? 'prim' : 'peligro'} grande" id="r-confirmar" style="margin-top:14px" disabled>${cierre ? 'Confirmar: venta cerrada' : 'Confirmar: ya no le interesa'}</button>
+    </div></div>`;
+    $('#modal').classList.remove('hidden');
+    $('[data-rapido-cerrar]').onclick = () => this.cerrar();
+    $('#r-reintentar').onclick = () => this.ubicar();
+    if ($('#r-simular')) $('#r-simular').onclick = () => this.recibir({lat: p.lat + 0.00003, lng: p.lng, acc: 9});
+    $('#r-confirmar').onclick = () => this.guardar();
+    if (gps) this.recibir(gps); else this.ubicar();
+  },
+  cerrar() { this.parar(); $('#modal').classList.add('hidden'); },
+  parar() { if (this.watch != null) navigator.geolocation.clearWatch(this.watch); clearTimeout(this.timer); this.watch = null; },
+  estado(clase, ico, txt) { const g = $('#r-gps'); if (!g) return; g.className = 'gps ' + clase; g.querySelector('.ico').textContent = ico; $('#r-gps-txt').textContent = txt; },
+  ubicar() {
+    this.parar(); this.gps = null; $('#r-confirmar').disabled = true; $('#r-reintentar').classList.add('hidden');
+    this.estado('busca', '📡', 'Verificando que estés en la tienda…');
+    if (!navigator.geolocation) return this.fallo('Este equipo no tiene GPS disponible.');
+    let mejor = null;
+    const fin = () => { this.parar(); mejor ? this.recibir(mejor) : this.fallo('No se pudo obtener tu ubicación. Activa el GPS.'); };
+    this.watch = navigator.geolocation.watchPosition(pos => {
+      const c = pos.coords;
+      if (!mejor || c.accuracy < mejor.acc) mejor = {lat: c.latitude, lng: c.longitude, acc: Math.round(c.accuracy)};
+      if (mejor.acc <= 15) fin();
+    }, err => { if (err.code === 1) { this.parar(); this.fallo('Permiso de ubicación denegado. Actívalo para continuar.'); } },
+    {enableHighAccuracy: true, maximumAge: 0, timeout: 20000});
+    this.timer = setTimeout(fin, 15000);
+  },
+  fallo(msg) { this.estado('mal', '⚠️', msg); $('#r-reintentar').classList.remove('hidden'); },
+  recibir(g) {
+    this.parar();
+    if (!$('#r-gps')) return;
+    if (g.acc > CONFIG.PRECISION_MAX_M) return this.fallo(`Ubicación imprecisa (±${g.acc} m). Sal a la vereda y vuelve a intentar.`);
+    const d = Math.round(distM(g, this.p));
+    if (d > CONFIG.RADIO_REVISITA_M) return this.fallo(`Estás a ${d} m de la tienda. Tienes que estar en el lugar (a menos de ${CONFIG.RADIO_REVISITA_M} m).`);
+    this.gps = g;
+    this.estado('ok', '📍', `Estás en la tienda (a ${d} m) ✓`);
+    $('#r-reintentar').classList.add('hidden');
+    if ($('#r-simular')) $('#r-simular').classList.add('hidden');
+    $('#r-confirmar').disabled = false;
+  },
+  async guardar() {
+    if (!this.gps) return;
+    const p = this.p, ahora = new Date(), id = uid(), cierre = this.res === 'cierre';
+    const visita = {
+      id, fechaHora: isoLocal(ahora), fecha: isoDia(ahora), usuario: Sesion.s.usuario, vendedor: Sesion.s.nombre,
+      tipo: 'revisita', puntoId: p.id, negocio: p.negocio, direccion: p.direccion, tipoPunto: p.tipoPunto || '', distrito: p.distrito || '',
+      tipoVia: p.tipoVia || '', contacto: p.contacto || '', cargo: p.cargo || '', telefono: p.telefono || '',
+      congeladora: cierre ? ($('#r-cong').value || p.congeladora || '') : (p.congeladora || ''),
+      resultado: this.res, motivo: cierre ? '' : $('#r-motivo').value, observaciones: $('#r-obs').value.trim(),
+      lat: +this.gps.lat.toFixed(6), lng: +this.gps.lng.toFixed(6), precision: this.gps.acc,
+      fotoUrl: String(p.fotoUrl || '').startsWith('data:') && !API.demo ? '' : (p.fotoUrl || '')
+    };
+    $('#r-confirmar').disabled = true;
+    try {
+      await Cola.poner({id, visita, foto: null});
+      this.cerrar();
+      toast(cierre ? '¡Venta cerrada! ✓' : 'Marcada como "ya no le interesa"');
+      await Vendedor.render();
+      sincronizar();
+    } catch (e) { toast('No se pudo guardar: ' + e.message, true); $('#r-confirmar').disabled = false; }
   }
 };
 
@@ -1845,7 +1933,7 @@ const Demo = {
       if (todas.some(x => x.id === v.id)) return {id: v.id, repetida: true};
       const problema = validarVisita(v, construirPuntos(todas, this.leer(this.K_REV)));
       if (problema) err(problema);
-      v.fotoUrl = d.foto || '';
+      v.fotoUrl = d.foto || v.fotoUrl || '';
       const nuevas = this.leer(this.K_VIS); nuevas.push(v);
       try { localStorage.setItem(this.K_VIS, JSON.stringify(nuevas)); }
       catch { err('La memoria de la demo está llena. Usa "Reiniciar datos de la demo".'); }
@@ -1858,7 +1946,8 @@ const Demo = {
       return {
         perfil: {canales: yo.canales || [], distritos: yo.distritos || [], metaDiaria: yo.metaDiaria || ''}, listas: this.listas(),
         puntos: [...pts.values()].filter(p => !p.anulado).map(p => ({id: p.id, negocio: p.base.negocio, direccion: p.base.direccion, tipoPunto: p.base.tipoPunto, distrito: p.base.distrito,
-          lat: p.base.lat, lng: p.base.lng, estado: p.estado, fotoUrl: p.base.fotoUrl, usuario: p.base.usuario, vendedor: p.base.vendedor, fecha: p.base.fecha, fechaHora: p.base.fechaHora})),
+          lat: p.base.lat, lng: p.base.lng, estado: p.estado, fotoUrl: p.base.fotoUrl, usuario: p.base.usuario, vendedor: p.base.vendedor, fecha: p.base.fecha, fechaHora: p.base.fechaHora,
+          tipoVia: p.base.tipoVia, contacto: p.base.contacto, cargo: p.base.cargo, telefono: p.base.telefono, congeladora: p.ultima.congeladora || p.base.congeladora})),
         mias: todas.filter(v => v.usuario === user.usuario && v.fecha >= desde)
       };
     }
@@ -2058,10 +2147,9 @@ function init() {
     Vendedor.tab = b.dataset.vt;
     $$('[data-vt]').forEach(x => x.classList.toggle('on', x === b));
     $('#vt-hoy').classList.toggle('hidden', b.dataset.vt !== 'hoy');
-    $('#vt-pros').classList.toggle('hidden', b.dataset.vt !== 'pros');
     $('#vt-hist').classList.toggle('hidden', b.dataset.vt !== 'hist');
     if (b.dataset.vt === 'hoy' && Vendedor.mapa) setTimeout(() => Vendedor.mapa.invalidateSize(), 50);
-    if (b.dataset.vt !== 'hoy') { Vendedor.renderTiendas(b.dataset.vt); Vendedor.ubicar(); }
+    if (b.dataset.vt !== 'hoy') { Vendedor.renderTiendas('hist'); Vendedor.ubicar(); }
   }));
   $('#v-nueva').addEventListener('click', () => Form.abrir('nueva'));
   $('#v-hist-buscar').addEventListener('input', () => Vendedor.renderTiendas('hist'));
@@ -2072,6 +2160,8 @@ function init() {
     if (hf) { Vendedor.filtroHist = hf.dataset.hf; $$('[data-hf]').forEach(x => x.classList.toggle('on', x === hf)); return Vendedor.renderTiendas('hist'); }
     const fo = e.target.closest('[data-foco]');
     if (fo && !e.target.closest('button, a')) return Vendedor.enfocar(fo.dataset.foco, fo.dataset.cual);
+    const rq = e.target.closest('[data-rapido]');
+    if (rq) { const p = Vendedor.puntosLocales().find(x => x.id === rq.dataset.rapido); if (p) Rapido.abrir(p, rq.dataset.res); return; }
     const r = e.target.closest('[data-revisitar]');
     if (r) { const p = Vendedor.puntosLocales().find(x => x.id === r.dataset.revisitar); if (p) Form.abrir('revisita', p, r.dataset.res || null); }
     const d = e.target.closest('[data-desc]');
@@ -2083,7 +2173,11 @@ function init() {
   $('#f-gps-retry').addEventListener('click', () => Form.capturarGPS());
   $$('.js-demo-gps').forEach(b => b.addEventListener('click', () => Form.simularGPS(b.dataset.sim)));
   $('#f-es-otra').addEventListener('click', () => Form.mostrarFicha());
-  $('#f-cerca-lista').addEventListener('click', e => { const b = e.target.closest('[data-es-esta]'); if (b) Form.pasarARevisita(b.dataset.esEsta); });
+  $('#f-cerca-lista').addEventListener('click', e => {
+    const b = e.target.closest('[data-cerca-rapido]'); if (!b) return;
+    const p = Vendedor.puntosLocales().find(x => x.id === b.dataset.cercaRapido); const gps = Form.gps;
+    Form.cerrar(); if (p) Rapido.abrir(p, b.dataset.res, gps);
+  });
   $('#f-ficha').addEventListener('submit', e => Form.guardar(e));
 
   // supervisor
