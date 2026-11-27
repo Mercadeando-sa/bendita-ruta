@@ -258,15 +258,14 @@ table.usr tr.inact td{opacity:.5}
     </form>
     <div id="login-demo" class="hidden" style="margin-top:18px">
       <div class="aviso amar">Modo demo: datos de ejemplo guardados solo en este navegador. Entra con un clic:</div>
+      <div class="small mut" style="margin:12px 0 6px;text-align:center">Vendedores</div>
       <div class="demo-users">
-        <button class="btn sec" data-u="carla" data-p="1111">Carla<br><small class="mut">vendedora</small></button>
-        <button class="btn sec" data-u="jorge" data-p="2222">Jorge<br><small class="mut">vendedor</small></button>
-        <button class="btn sec" data-u="miguel" data-p="3333">Miguel<br><small class="mut">vendedor</small></button>
-        <button class="btn prim" data-u="supervisor" data-p="1234">Tomás<br><small style="opacity:.85">supervisor</small></button>
+        <button class="btn sec" data-u="carla" data-p="1111">Carla Ramos<br><small class="mut">con historial</small></button>
+        <button class="btn sec" data-u="juanjo" data-p="2026">Juanjo Demo<br><small class="mut">desde cero</small></button>
       </div>
-      <div class="small mut" style="margin:14px 0 6px;text-align:center">Desde cero (sin datos de ejemplo) · PIN 2026</div>
+      <div class="small mut" style="margin:12px 0 6px;text-align:center">Supervisores y administrador</div>
       <div class="demo-users" style="grid-template-columns:1fr 1fr 1fr">
-        <button class="btn sec" data-u="juanjo" data-p="2026">Juanjo Demo<br><small class="mut">vendedor</small></button>
+        <button class="btn prim" data-u="supervisor" data-p="1234">Tomás<br><small style="opacity:.85">supervisor</small></button>
         <button class="btn prim" data-u="arthur" data-p="2026">Arthur Demo<br><small style="opacity:.85">supervisor</small></button>
         <button class="btn prim" data-u="admin" data-p="2026" style="background:#0f172a">Admin Demo<br><small style="opacity:.85">administrador</small></button>
       </div>
@@ -1680,8 +1679,8 @@ const Admin = {
     const pl = (k, a, b) => `${k} ${k === 1 ? a : b}`;
     $('#a-resumen').textContent = `Activos: ${pl(n('vendedor'), 'vendedor', 'vendedores')} · ${pl(n('supervisor'), 'supervisor', 'supervisores')} · ${pl(n('admin'), 'administrador', 'administradores')}`;
     const equipo = u => {
-      if (u.rol === 'vendedor') { const s = this.de(u.supervisor); return s ? `Supervisor: <b>${esc(s.nombre)}</b>` : '<span style="color:#b45309">Sin supervisor</span>'; }
-      if (u.rol === 'supervisor') { const vs = this.usuarios.filter(v => v.rol === 'vendedor' && v.supervisor === u.usuario && v.activo); return vs.length ? `${vs.length} vendedor${vs.length > 1 ? 'es' : ''}: ${esc(vs.map(v => v.nombre.split(' ')[0]).join(', '))}` : '<span style="color:#b45309">Sin vendedores</span>'; }
+      if (u.rol === 'vendedor') { const ss = (u.supervisores || []).map(x => this.de(x)).filter(Boolean); return ss.length ? `Supervisor${ss.length > 1 ? 'es' : ''}: <b>${esc(ss.map(x => x.nombre).join(', '))}</b>` : '<span style="color:#b45309">Sin supervisor</span>'; }
+      if (u.rol === 'supervisor') { const vs = this.usuarios.filter(v => v.rol === 'vendedor' && (v.supervisores || []).includes(u.usuario) && v.activo); return vs.length ? `${vs.length} vendedor${vs.length > 1 ? 'es' : ''}: ${esc(vs.map(v => v.nombre.split(' ')[0]).join(', '))}` : '<span style="color:#b45309">Sin vendedores</span>'; }
       return '<span class="mut">Todos</span>';
     };
     const asign = u => u.rol !== 'vendedor' ? '' : [
@@ -1727,8 +1726,8 @@ const Admin = {
       <select id="u-rol" ${u.usuario === Sesion.s.usuario ? 'disabled' : ''}>${Object.entries(ROLES).map(([k, t]) => `<option value="${k}" ${u.rol === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
       <label class="f" for="u-tel">Celular (para enviarle su acceso por WhatsApp) <span class="opc">(opcional)</span></label><input id="u-tel" type="tel" value="${esc(u.telefono || '')}" placeholder="9XX XXX XXX">
       <div id="u-sec-vend">
-        <label class="f" for="u-sup">Supervisor asignado</label>
-        <select id="u-sup"><option value="">Sin asignar</option>${sups.map(s => `<option value="${esc(s.usuario)}" ${u.supervisor === s.usuario ? 'selected' : ''}>${esc(s.nombre)}</option>`).join('')}</select>
+        <label class="f">Supervisores que lo ven <span class="opc">(puedes marcar varios)</span></label>
+        ${sups.length ? `<div class="checks">${sups.map(x => `<label><input type="checkbox" name="u-sups" value="${esc(x.usuario)}" ${(u.supervisores || []).includes(x.usuario) ? 'checked' : ''}> ${esc(x.nombre)}</label>`).join('')}</div>` : '<div class="small mut">Aún no hay supervisores.</div>'}
         <label class="f">Tipos de punto asignados <span class="opc">(ninguno marcado = todos)</span></label>
         <div class="checks">${chk('u-can', Listas.canales, u.canales || [])}</div>
         <label class="f">Distritos asignados <span class="opc">(ninguno marcado = todos)</span></label>
@@ -1738,8 +1737,8 @@ const Admin = {
       </div>
       <div id="u-sec-sup">
         <label class="f">Vendedores de su equipo</label>
-        ${vends.length ? `<div class="caja-lista"><div class="checks">${vends.map(v => `<label><input type="checkbox" name="u-eq" value="${esc(v.usuario)}" ${u.usuario && v.supervisor === u.usuario ? 'checked' : ''}> ${esc(v.nombre)}${v.supervisor && v.supervisor !== u.usuario ? ` <span class="mut">(hoy con ${esc(this.de(v.supervisor)?.nombre || v.supervisor)})</span>` : ''}</label>`).join('')}</div></div>
-        <div class="small mut" style="margin-top:4px">Si marcas un vendedor que ya tiene supervisor, pasa a este equipo.</div>` : '<div class="small mut">Aún no hay vendedores. Créalos y luego asígnalos aquí o desde su ficha.</div>'}
+        ${vends.length ? `<div class="caja-lista"><div class="checks">${vends.map(v => { const otros = (v.supervisores || []).filter(x => x !== u.usuario).map(x => this.de(x)?.nombre || x); return `<label><input type="checkbox" name="u-eq" value="${esc(v.usuario)}" ${u.usuario && (v.supervisores || []).includes(u.usuario) ? 'checked' : ''}> ${esc(v.nombre)}${otros.length ? ` <span class="mut">(también con ${esc(otros.join(', '))})</span>` : ''}</label>`; }).join('')}</div></div>
+        <div class="small mut" style="margin-top:4px">Un vendedor puede estar en el equipo de varios supervisores.</div>` : '<div class="small mut">Aún no hay vendedores. Créalos y luego asígnalos aquí o desde su ficha.</div>'}
       </div>
       <div id="u-error" class="aviso rojo hidden" style="margin-top:12px"></div>
       <div style="display:flex;gap:8px;margin-top:16px"><button class="btn prim" type="submit" style="flex:1">${nuevo ? 'Crear usuario' : 'Guardar cambios'}</button><button class="btn sec" type="button" data-cerrar-modal>Cancelar</button></div>
@@ -1758,8 +1757,8 @@ const Admin = {
     const val = id => $(id).value.trim();
     const marcados = n => $$(`input[name="${n}"]:checked`).map(i => i.value);
     const u = {...orig, nombre: val('#u-nombre'), usuario: nuevo ? val('#u-usuario').toLowerCase() : orig.usuario, rol: $('#u-rol').value, telefono: val('#u-tel')};
-    if (u.rol === 'vendedor') Object.assign(u, {supervisor: $('#u-sup').value, canales: marcados('u-can'), distritos: marcados('u-dis'), metaDiaria: val('#u-meta')});
-    else Object.assign(u, {supervisor: '', canales: [], distritos: [], metaDiaria: ''});
+    if (u.rol === 'vendedor') Object.assign(u, {supervisores: marcados('u-sups'), canales: marcados('u-can'), distritos: marcados('u-dis'), metaDiaria: val('#u-meta')});
+    else Object.assign(u, {supervisores: [], canales: [], distritos: [], metaDiaria: ''});
     const errs = [];
     if (u.nombre.length < 3) errs.push('Escribe el nombre completo');
     if (!/^[a-z0-9._]{3,20}$/.test(u.usuario)) errs.push('El usuario debe tener de 3 a 20 caracteres: minúsculas, números o punto');
@@ -1801,8 +1800,8 @@ const Admin = {
   },
   async alternarActivo(usuario) {
     const u = this.de(usuario); if (!u) return;
-    const vs = this.usuarios.filter(v => v.supervisor === usuario && v.activo).length;
-    const txt = u.activo ? `¿Desactivar a ${u.nombre}? Ya no podrá ingresar, pero su historial de visitas se conserva.${vs ? `\n\nTiene ${vs} vendedor(es) asignado(s): quedarán sin supervisor hasta que los reasignes.` : ''}` : `¿Activar nuevamente a ${u.nombre}?`;
+    const vs = this.usuarios.filter(v => (v.supervisores || []).includes(usuario) && v.activo).length;
+    const txt = u.activo ? `¿Desactivar a ${u.nombre}? Ya no podrá ingresar, pero su historial de visitas se conserva.${vs ? `\n\nTiene ${vs} vendedor(es) en su equipo: dejará de verlos.` : ''}` : `¿Activar nuevamente a ${u.nombre}?`;
     if (!confirm(txt)) return;
     try { await API.call('adminGuardarUsuario', {datosUsuario: {...u, activo: !u.activo}, nuevo: false, equipo: null}); toast(u.activo ? 'Usuario desactivado' : 'Usuario activado'); await this.cargar(); }
     catch (e) { if (!manejarAuth(e)) toast(e.message, true); }
@@ -1825,20 +1824,19 @@ const Admin = {
    MODO DEMO: simula el servidor con datos de ejemplo en este navegador
    ===================================================================== */
 const Demo = {
-  // usuarios iniciales de la demo. "limpio" = espacio "desde cero" (no ven los datos de ejemplo)
+  // usuarios iniciales de la demo: Carla (con historial de ejemplo) y Juanjo (desde cero), ambos en el equipo de Tomás y de Arthur
   usuariosIniciales() {
     const todo = {canales: [], distritos: [], metaDiaria: '', telefono: '', activo: true, intentos: 0, bloqueadoHasta: '', debeCambiarPin: false};
+    const sups = ['supervisor', 'arthur'];
     return [
-      {...todo, usuario: 'carla', pinPlano: '1111', nombre: 'Carla Ramos', rol: 'vendedor', supervisor: 'supervisor', distritos: ['Lince', 'San Isidro'], metaDiaria: 12},
-      {...todo, usuario: 'jorge', pinPlano: '2222', nombre: 'Jorge Quispe', rol: 'vendedor', supervisor: 'supervisor', metaDiaria: 12},
-      {...todo, usuario: 'miguel', pinPlano: '3333', nombre: 'Miguel Torres', rol: 'vendedor', supervisor: 'supervisor', metaDiaria: 10},
+      {...todo, usuario: 'carla', pinPlano: '1111', nombre: 'Carla Ramos', rol: 'vendedor', supervisores: sups, distritos: ['Lince', 'San Isidro', 'Miraflores', 'Cercado de Lima'], metaDiaria: 12},
+      {...todo, usuario: 'juanjo', pinPlano: '2026', nombre: 'Juanjo Demo', rol: 'vendedor', supervisores: sups, metaDiaria: 10},
       {...todo, usuario: 'supervisor', pinPlano: '1234', nombre: 'Tomás', rol: 'supervisor'},
-      {...todo, usuario: 'juanjo', pinPlano: '2026', nombre: 'Juanjo Demo', rol: 'vendedor', supervisor: 'arthur', metaDiaria: 10, limpio: true},
-      {...todo, usuario: 'arthur', pinPlano: '2026', nombre: 'Arthur Demo', rol: 'supervisor', limpio: true},
-      {...todo, usuario: 'admin', pinPlano: '2026', nombre: 'Admin Demo', rol: 'admin', limpio: true}
+      {...todo, usuario: 'arthur', pinPlano: '2026', nombre: 'Arthur Demo', rol: 'supervisor'},
+      {...todo, usuario: 'admin', pinPlano: '2026', nombre: 'Admin Demo', rol: 'admin'}
     ];
   },
-  K_VIS: 'rc_demo_visitas', K_REV: 'rc_demo_revisiones', K_USR: 'rc_demo_usuarios', K_ACT: 'rc_demo_actividad', K_LIS: 'rc_demo_listas',
+  K_VIS: 'rc_demo2_visitas', K_REV: 'rc_demo2_revisiones', K_USR: 'rc_demo2_usuarios', K_ACT: 'rc_demo2_actividad', K_LIS: 'rc_demo2_listas',
   leer(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
   guardar(k, v) { localStorage.setItem(k, JSON.stringify(v)); if (k === this.K_USR) this._lim = null; },
   usuarios() { let u = this.leer(this.K_USR); if (!u.length) { u = this.usuariosIniciales(); this.guardar(this.K_USR, u); } return u; },
@@ -1870,7 +1868,7 @@ const Demo = {
   actividad() { const a = this.leer(this.K_ACT); return Array.isArray(a) ? {} : a; },
   publico(x) {
     const act = this.actividad();
-    return {usuario: x.usuario, nombre: x.nombre, rol: x.rol, activo: !!x.activo, supervisor: x.supervisor || '', telefono: x.telefono || '',
+    return {usuario: x.usuario, nombre: x.nombre, rol: x.rol, activo: !!x.activo, supervisores: x.supervisores || [], telefono: x.telefono || '',
       canales: x.canales || [], distritos: x.distritos || [], metaDiaria: x.metaDiaria || '', ultimaActividad: act[x.usuario] || '',
       debeCambiarPin: !!x.debeCambiarPin, bloqueado: !!(x.bloqueadoHasta && new Date(x.bloqueadoHasta) > new Date())};
   },
@@ -1910,17 +1908,18 @@ const Demo = {
         if (!d.nuevo && (!x || !!x.limpio !== limpio)) err('No existe ese usuario');
         if (!d.nuevo && x.usuario === user.usuario && (u.rol !== 'admin' || !u.activo)) err('No puedes quitarte el rol de administrador ni desactivarte a ti mismo');
         if (!d.nuevo && x.rol === 'admin' && (u.rol !== 'admin' || !u.activo) && delEspacio.filter(z => z.rol === 'admin' && z.activo).length <= 1) err('Debe quedar al menos un administrador activo');
-        if (u.supervisor && !delEspacio.some(z => z.usuario === u.supervisor && z.rol === 'supervisor')) err('El supervisor elegido no existe');
+        if ((u.supervisores || []).some(sv => !delEspacio.some(z => z.usuario === sv && z.rol === 'supervisor'))) err('Uno de los supervisores elegidos no existe');
         let pin = null;
         if (d.nuevo) { x = {usuario: u.usuario, limpio, intentos: 0, bloqueadoHasta: '', creado: isoLocal(new Date())}; us.push(x); pin = await nuevoPin(x); }
         const rolAntes = x.rol;
         Object.assign(x, {nombre: u.nombre, rol: u.rol, telefono: u.telefono || '', activo: u.activo !== false,
-          supervisor: u.rol === 'vendedor' ? (u.supervisor || '') : '', canales: u.rol === 'vendedor' ? (u.canales || []) : [],
+          supervisores: u.rol === 'vendedor' ? (u.supervisores || []) : [], canales: u.rol === 'vendedor' ? (u.canales || []) : [],
           distritos: u.rol === 'vendedor' ? (u.distritos || []) : [], metaDiaria: u.rol === 'vendedor' ? (u.metaDiaria || '') : ''});
-        if (rolAntes === 'supervisor' && (x.rol !== 'supervisor' || !x.activo)) us.forEach(v => { if (v.supervisor === x.usuario) v.supervisor = ''; });
+        const quitar = v => { v.supervisores = (v.supervisores || []).filter(z => z !== x.usuario); };
+        if (rolAntes === 'supervisor' && (x.rol !== 'supervisor' || !x.activo)) us.forEach(quitar);
         if (x.rol === 'supervisor' && Array.isArray(d.equipo)) us.forEach(v => {
           if (v.rol !== 'vendedor' || !!v.limpio !== limpio) return;
-          if (d.equipo.includes(v.usuario)) v.supervisor = x.usuario; else if (v.supervisor === x.usuario) v.supervisor = '';
+          if (d.equipo.includes(v.usuario)) { if (!(v.supervisores || []).includes(x.usuario)) v.supervisores = [...(v.supervisores || []), x.usuario]; } else quitar(v);
         });
         this.guardar(this.K_USR, us);
         return {usuario: x.usuario, pinTemporal: pin};
@@ -1953,7 +1952,7 @@ const Demo = {
     }
     if (accion === 'supervisorDatos') {
       if (!['supervisor', 'admin'].includes(user.rol)) err('Solo para supervisores');
-      const vends = us.filter(u => u.rol === 'vendedor' && !!u.limpio === limpio && (user.rol === 'admin' ? u.activo : u.supervisor === user.usuario && u.activo));
+      const vends = us.filter(u => u.rol === 'vendedor' && !!u.limpio === limpio && u.activo && (user.rol === 'admin' || (u.supervisores || []).includes(user.usuario)));
       const set = new Set(vends.map(v => v.usuario));
       return {visitas: this.todas(limpio).filter(v => set.has(v.usuario)), revisiones: this.leer(this.K_REV), listas: this.listas(),
         vendedores: vends.map(v => this.publico(v))};
@@ -1968,9 +1967,9 @@ const Demo = {
     err('Acción desconocida');
   },
   reiniciar() { for (const k of [this.K_VIS, this.K_REV, this.K_USR, this.K_ACT, this.K_LIS, 'rc_listas']) localStorage.removeItem(k); this._semilla = null; this._lim = null; },
-  // cada día cambian los datos de ejemplo: se borra lo hecho sobre ellos, pero se conserva lo de los usuarios "desde cero"
+  // cada día cambian los datos de ejemplo: se borra lo hecho sobre las tiendas de ejemplo, pero se conserva todo lo demás
   reiniciarDia() {
-    localStorage.setItem(this.K_VIS, JSON.stringify(this.leer(this.K_VIS).filter(v => this.esLimpio(v.usuario))));
+    localStorage.setItem(this.K_VIS, JSON.stringify(this.leer(this.K_VIS).filter(v => !String(v.puntoId).startsWith('demo'))));
     localStorage.setItem(this.K_REV, JSON.stringify(this.leer(this.K_REV).filter(r => !String(r.idA).startsWith('demo') && !String(r.idB).startsWith('demo'))));
     this._semilla = null;
   },
@@ -1988,8 +1987,6 @@ const Demo = {
     const CONTACTOS = ['Rosa', 'Luis', 'Carmen', 'Pedro', 'Juana', 'Mario', 'Ana', 'José', 'Lucía', 'Víctor', ''];
     const CALLES = [
       {usuario: 'carla', vendedor: 'Carla Ramos', via: 'Av. Arequipa', dl: 0, tipoVia: 'Avenida'},
-      {usuario: 'jorge', vendedor: 'Jorge Quispe', via: 'Av. Petit Thouars', dl: 0.0024, tipoVia: 'Avenida'},
-      {usuario: 'miguel', vendedor: 'Miguel Torres', via: 'Av. Arenales', dl: -0.0028, tipoVia: 'Avenida'}
     ];
     const lngEje = lat => -77.0372 + (lat + 12.060) / (-0.059) * (0.0076);
         NOMBRES.push('Quispe', 'Huamán', 'Mamani', 'Chávez', 'Rojas', 'Vargas', 'Castillo', 'Mendoza', 'Gutiérrez', 'Salazar', 'Paredes', 'Espinoza', 'Ccori', 'Inti', 'Mi Perú', 'Nueva Era', 'El Encanto', 'Doña Pocha', 'Don Teo', 'Belén', 'San Judas', 'La Estrella', 'El Rápido', 'Don Lalo', 'La Única');
@@ -2000,7 +1997,7 @@ const Demo = {
       while (k++ < 60 && vs.some(v => v.tipo === 'nueva' && Math.abs(v.lat - lat) < 0.0006 && Math.abs(v.lng - lng) < 0.0006 && similitudNombres(v.negocio, n) >= 0.5));
       return n;
     };
-    const vs = []; const pendientes = {carla: [], jorge: [], miguel: []};
+    const vs = []; const pendientes = {carla: []};
     let idn = 0; const nid = () => 'demo' + (++idn);
     const nueva = (c, fecha, min, lat, lng, extra = {}) => {
       const id = nid(); const neg = extra.negocio || nombre(lat, lng);
@@ -2049,12 +2046,12 @@ const Demo = {
         }
       });
     }
-    // un duplicado a propósito: Miguel registra como "nueva" una tienda que Carla ya tenía
+    // un duplicado a propósito: Carla vuelve a registrar como "nueva" una tienda que ya tenía
     const base = vs.find(v => v.usuario === 'carla' && v.tipo === 'nueva' && v.fecha < hoy);
     if (base) {
       const id = nid(); const fecha = sumarDias(hoy, -1) > base.fecha ? sumarDias(hoy, -1) : hoy;
       const neg = base.negocio.startsWith('Bodega ') ? base.negocio.replace('Bodega ', 'Minimarket ') : base.negocio.replace(/^\S+ /, 'Bodega ');
-      vs.push({...base, id, puntoId: id, fecha, fechaHora: `${fecha}T17:40:00`, usuario: 'miguel', vendedor: 'Miguel Torres',
+      vs.push({...base, id, puntoId: id, fecha, fechaHora: `${fecha}T17:40:00`, usuario: 'carla', vendedor: 'Carla Ramos',
         negocio: neg === base.negocio ? base.negocio + ' 2' : neg, lat: +(base.lat + 0.00006).toFixed(6), lng: +(base.lng - 0.00004).toFixed(6),
         resultado: 'cierre', motivo: '', contacto: base.contacto || 'Rosa', fotoUrl: base.fotoUrl});
     }
@@ -2105,6 +2102,8 @@ function arrancar() {
 function salir() {
   Supervisor.detener(); Sesion.cerrar(); $('#modal').classList.add('hidden'); mostrar('login');
   Vendedor.miPos = null; $('[data-vt="hoy"]').click();
+  Object.assign(Supervisor, {tab: 'todos', dia: null, fCanal: '', fDistrito: '', claveEncuadre: ''});
+  $('#s-f-canal').value = ''; $('#s-f-distrito').value = '';
 }
 
 function init() {
